@@ -68,6 +68,9 @@ class DiscoveryMW:
             elif discovery_request.msg_type == discovery_pb2.TYPE_ISREADY:
                 self.logger.info("DiscoveryMW::handle_request - Processing readiness check")
                 response = self.process_is_ready()
+            elif discovery_request.msg_type == discovery_pb2.TYPE_LOOKUP_PUB_BY_TOPIC:
+                self.logger.info("DiscoveryMW::handle_request - Processing topic lookup request")
+                response = self.process_lookup_request(discovery_request.lookup_req)
             else:
                 self.logger.error("DiscoveryMW::handle_request - Unknown request type received")
                 response = self.create_error_response("Unknown request type")
@@ -82,19 +85,30 @@ class DiscoveryMW:
             self.logger.info("DiscoveryMW::process_registration - Storing registration info")
             # Extract entity details
             entity_id = register_req.info.id
+            entity_ip=register_req.info.addr
+            entity_port=register_req.info.port
             role = register_req.role
             entity_topics = list(register_req.topiclist)
             if role == discovery_pb2.ROLE_PUBLISHER:
                 if entity_id in self.publishers:
                     return self.create_register_response(False, "Publisher already registered")
                 # Store publisher details
-                self.publishers[entity_id] = entity_topics
+                self.publishers[entity_id] = {}
+                self.publishers[entity_id]["Topics"] = entity_topics
+                self.publishers[entity_id]["IP"] = entity_ip
+                self.publishers[entity_id]["Port"] = entity_port
+                # entity_topics, entity_ip,entity_port
+                self.logger.info(f"---- PUBLISHER INFO {self.publishers} -----")
                 self.registered_pubs += 1
             elif role == discovery_pb2.ROLE_SUBSCRIBER:
                 if entity_id in self.subscribers:
                     return self.create_register_response(False, "Subscriber already registered")
                 # Store subscriber details
-                self.subscribers[entity_id] = entity_topics
+                self.subscribers[entity_id] = {}
+                # self.subscribers[entity_id]["Topics"] = entity_topics
+                # self.subscribers[entity_id]["IP"] = entity_ip
+                # self.subscribers[entity_id]["Port"] = entity_port
+                self.logger.info(f"---- SUBSRCIBER INFO {self.subscribers} -----")
                 self.registered_subs += 1
             self.logger.info(f"Registered {entity_id} as {'Publisher' if role == discovery_pb2.ROLE_PUBLISHER else 'Subscriber'}")
             # Return success response
@@ -115,6 +129,47 @@ class DiscoveryMW:
             response.msg_type = discovery_pb2.TYPE_ISREADY
             response.isready_resp.status = ready
             return response
+
+    def process_lookup_request(self, lookup_req):
+        """ Process subscriber lookup request for publishers by topic """
+
+        try:
+            self.logger.info("DiscoveryMW::process_lookup_request - Processing topic lookup request")
+
+            # Extract requested topics
+            requested_topics = set(lookup_req.topiclist)
+            matched_publishers = []
+
+            # Search for publishers that match these topics
+            for pub_id, pub_data in self.publishers.items():
+                pub_topics = set(pub_data["Topics"])  # Extract topics from dictionary
+                common_topics = requested_topics.intersection(pub_topics)
+
+                if common_topics:
+                    # Create a PublisherInfo entry
+                    pub_info = discovery_pb2.LookupPubByTopicResp.PublisherInfo()
+                    pub_info.id = pub_id
+                    pub_info.addr = pub_data["IP"]
+                    pub_info.port = pub_data["Port"]
+                    pub_info.topics.extend(pub_data["Topics"])
+
+                    matched_publishers.append(pub_info)
+
+
+            response = discovery_pb2.DiscoveryResp()
+            response.msg_type = discovery_pb2.TYPE_LOOKUP_PUB_BY_TOPIC
+            response.lookup_resp.status = True  
+            response.lookup_resp.publishers.extend(matched_publishers)
+
+            self.logger.info(f"DiscoveryMW::process_lookup_request - Found {len(matched_publishers)} matching publishers")
+
+            return response
+
+        except Exception as e:
+            raise e
+
+
+
     
     def create_register_response(self, success, reason=""):
         """ Create a registration response message """

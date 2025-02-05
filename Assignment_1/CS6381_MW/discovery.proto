@@ -85,6 +85,7 @@ message IsReadyResp
 // discovery service will send whereabouts of each publisher; in the Broker approach, the
 // whereabouts of the broker will be sent. Accordingly there will be request and response
 // message types
+
 message LookupPubByTopicReq
 {
     repeated string topiclist = 1; // modify this appropriately
@@ -95,9 +96,14 @@ message LookupPubByTopicReq
 // accordingly there will be a response to the above message
 message LookupPubByTopicResp
 {
-     // TO-DO
-     // decide what fields go here. It wil be a list of publishers (with their details)
-    // Maybe the RegistrantInfo message can be reused.
+    bool status =  1;
+    message PublisherInfo {
+        string id = 2;       // Publisher ID
+        string addr = 3;     // Publisher IP address
+        uint32 port = 4;     // Publisher Port
+        repeated string topics = 5; // Topics published by this publisher
+    }
+    repeated PublisherInfo publishers = 6; // List of publishers publishing the requested topics
 }
 
 // Finally, we are going to make a union of all these request and response messages

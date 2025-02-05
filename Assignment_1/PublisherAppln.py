@@ -279,27 +279,28 @@ class PublisherAppln ():
   # of the message and what should be done. So it becomes the job
   # of the application. Hence this upcall is made to us.
   ########################################
-  def register_response (self, reg_resp):
-    ''' handle register response '''
+  def register_response(self, reg_resp):
+    """ Handle register response """
 
     try:
-      self.logger.info ("PublisherAppln::register_response")
-      if (reg_resp.status == discovery_pb2.STATUS_SUCCESS):
-        self.logger.debug ("PublisherAppln::register_response - registration is a success")
+        self.logger.info("PublisherAppln::register_response")
 
-        # set our next state to isready so that we can then send the isready message right away
-        self.state = self.State.ISREADY
-        
-        # return a timeout of zero so that the event loop in its next iteration will immediately make
-        # an upcall to us
-        return 0
-      
-      else:
-        self.logger.debug ("PublisherAppln::register_response - registration is a failure with reason {}".format (response.reason))
-        raise ValueError ("Publisher needs to have unique id")
+        if reg_resp.status == discovery_pb2.STATUS_SUCCESS:
+            self.logger.debug("PublisherAppln::register_response - registration is a success")
+
+            # Move to ISREADY state to check if system is ready
+            self.state = self.State.ISREADY
+
+            # Return 0 so event loop immediately makes next upcall
+            return 0
+
+        else:
+            self.logger.debug("PublisherAppln::register_response - registration is a failure with reason {}".format(reg_resp.reason))
+            raise ValueError("Publisher needs to have a unique ID")
 
     except Exception as e:
-      raise e
+        raise e
+
 
   ########################################
   # handle isready response method called as part of upcall
