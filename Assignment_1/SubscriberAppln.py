@@ -26,49 +26,166 @@
 # publication to show up. We also compute the latency for dissemination and
 # store all these time series data in some database for later analytics.
 
+import os     # for OS functions
+import sys    # for syspath and system exception
+import time
 import argparse
 import logging
+import configparser # for configuration parsing
+from enum import Enum
+
 from CS6381_MW import discovery_pb2
 from CS6381_MW.SubscriberMW import SubscriberMW
 
-class SubscriberApp:
+class SubscriberAppln():
+    # these are the states through which our subscriber appln object goes thru.
+    # We maintain the state so we know where we are in the lifecycle and then
+    # take decisions accordingly
+    class State (Enum):
+        INITIALIZE = 0,
+        CONFIGURE = 1,
+        REGISTER = 2,
+        ISREADY = 3,
+        COMPLETED = 4
+
     def __init__(self, logger):
+        self.state = self.State.INITIALIZE # state that are we in
         self.logger = logger
         self.name = None
         self.topiclist = None
+        self.lookup = None # one of the diff ways we do lookup
+        self.dissemination = None # direct or via broker
         self.mw_obj = None  # SubscriberMW middleware object
 
     def configure(self, args):
-        """ Initialize the SubscriberApp """
+        """ Initialize the SubscriberAppln object """
         try:
-            self.logger.info("SubscriberApp::configure")
-            self.name = args.name
-            self.topiclist = args.topiclist
+            self.logger.info("SubscriberAppln::configure")
 
-            # Set up middleware
+            # set our current state to CONFIGURE state
+            self.state = self.State.CONFIGURE
+
+            # initialize our variables
+            self.name = args.name
+
+            # Now, get the configuration object
+            self.logger.debug ("SubscriberAppln::configure - parsing config.ini")
+            config = configparser.ConfigParser()
+            config.read(args.config)
+            self.lookup = config["Discovery"]["Strategy"]
+            self.dissemination = config["Dissemination"]["Strategy"]
+
+            # Now setup up our underlying middleware object to which we delegate everything
+            self.logger.debug ("SubscriberAppln::configure - initialize the middleware object")
             self.mw_obj = SubscriberMW(self.logger)
-            self.mw_obj.configure(args)
-            self.logger.info("SubscriberApp::configure - completed")
+            self.mw_obj.configure (args) # pass remainder of the args to the m/w object
+
+            self.logger.info("SubscriberAppln::configure - configuration complete")
         except Exception as e:
             raise e
 
     def driver(self):
         """ Driver function for SubscriberApp """
         try:
-            self.logger.info("SubscriberApp::driver")
-            self.mw_obj.register("subscriber", self.name, self.topiclist)
+            self.logger.info("SubscriberAppln::driver")
 
-            # Now, run the event loop to wait for responses and messages
-            self.mw_obj.event_loop()
+            # dump our contents (debugging purposes)
+            self.dump ()
+
+            # First ask our middleware to keep a handle to us to make upcalls.
+            self.logger.debug ("SubscriberAppln::driver - upcall handle")
+            self.mw_obj.set_upcall_handle(self)
+
+            # Next step is to register with Discovery service. Change state for event handler
+            self.state = self.State.REGISTER
+
+            # Now simply let the underlying middleware object enter the event loop
+            # to handle events. However, a trick we play here is that we provide a timeout
+            # of zero so that control is immediately sent back to us where we can then
+            # register with the discovery service and then pass control back to the event loop
+            #
+            # As a rule, whenever we expect a reply from remote entity, we set timeout to
+            # None or some large value, but if we want to send a request ourselves right away,
+            # we set timeout is zero.
+            #
+            self.mw_obj.event_loop (timeout=0)  # start the event loop
+
+            self.logger.info ("SubscriberAppln::driver completed")
+        except Exception as e:
+            raise e
+        
+    def invoke_operation (self):
+        ''' Invoke operation depending on state  '''
+
+        try:
+            self.logger.info("SubscriberAppln::invoke_operation")
+
+            # check what state we are in. If we are in REGISTER state,
+            # we send register request to discovery service. If we are in
+            # ISREADY state, then we keep checking with the discovery
+            # service.
+            if (self.state == self.State.REGISTER):
+                # send a register msg to discovery service
+                self.logger.debug ("SubscriberAppln::invoke_operation - register with the discovery service")
+                self.mw_obj.register(self.name)
+
+                # Remember that we were invoked by the event loop as part of the upcall.
+                # So we are going to return back to it for its next iteration. Because
+                # we have just now sent a register request, the very next thing we expect is
+                # to receive a response from remote entity. So we need to set the timeout
+                # for the next iteration of the event loop to a large num and so return a None.
+                return None
+            
+            elif (self.state == self.State.ISREADY):
+                # Wait to receive publisher messages ???
+                self.logger.debug ("SubscriberAppln::invoke_operation - is ready to receive")
+                return None
+                
+            elif (self.state == self.State.COMPLETED):
+
+                # we are done. Time to break the event loop. So we created this special method on the
+                # middleware object to kill its event loop
+                self.mw_obj.disable_event_loop ()
+                return None
+
+            else:
+                raise ValueError ("Undefined state of the appln object")
+            
+            self.logger.info ("SubscriberAppln::invoke_operation completed")
+        except Exception as e:
+            raise e
+        
+    def register_response (self, reg_resp):
+        ''' handle register response '''
+
+        try:
+            self.logger.info ("SubscriberAppln::register_response")
+            if (reg_resp.status == discovery_pb2.STATUS_SUCCESS):
+                self.logger.debug ("SubscriberAppln::register_response - registration is a success")
+
+                # set our next state to isready so that we can then send the isready message right away
+                self.state = self.State.ISREADY
+                # return a timeout of zero so that the event loop in its next iteration will immediately make
+                # an upcall to us
+                return 0
+            
+            else:
+                self.logger.debug ("SubscriberAppln::register_response - registration is a failure with reason {}".format (response.reason))
+                raise ValueError ("Subscriber needs to have unique id")
+
         except Exception as e:
             raise e
 
     def dump(self):
         """ Dump the contents of the application state """
         try:
+            self.logger.info ("**********************************")
             self.logger.info("SubscriberApp::dump")
-            self.logger.info(f"Name: {self.name}")
-            self.logger.info(f"Topics: {self.topiclist}")
+            self.logger.info ("------------------------------")
+            self.logger.info ("     Name: {}".format (self.name))
+            self.logger.info ("     Dissemination: {}".format (self.dissemination))
+            #self.logger.info ("     TopicList: {}".format (self.topiclist))
+            self.logger.info ("**********************************")
         except Exception as e:
             raise e
 
@@ -76,9 +193,9 @@ def parseCmdLineArgs():
     """ Command line argument parser """
     parser = argparse.ArgumentParser(description="Subscriber Application")
 
-    parser.add_argument("-n", "--name", required=True, help="Unique name for the subscriber")
-    parser.add_argument("-t", "--topiclist", nargs='+', required=True, help="List of topics to subscribe to")
+    parser.add_argument("-n", "--name", default="sub", help="Unique name for the subscriber")
     parser.add_argument("-d", "--discovery", default="localhost:5555", help="Discovery service IP:Port")
+    parser.add_argument ("-c", "--config", default="config.ini", help="configuration file (default: config.ini)")
     parser.add_argument("-a", "--addr", default="localhost", help="IP address to advertise")
     parser.add_argument("-p", "--port", type=int, default=5578, help="Port number for the service")
     parser.add_argument("-l", "--loglevel", type=int, default=logging.INFO, choices=[logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR], help="Logging level")
@@ -87,20 +204,34 @@ def parseCmdLineArgs():
 
 def main():
     try:
-        logger = logging.getLogger("SubscriberApp")
-        logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        logger = logging.getLogger("SubscriberAppln")
+        #logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
+        logger.debug ("Main: parse command line arguments")
         args = parseCmdLineArgs()
-        logger.setLevel(args.loglevel)
 
-        # Set up and configure the SubscriberApp
-        app = SubscriberApp(logger)
+        # reset the log level to as specified
+        logger.debug ("Main: resetting log level to {}".format (args.loglevel))
+        logger.setLevel (args.loglevel)
+        logger.debug ("Main: effective log level is {}".format (logger.getEffectiveLevel ()))
+
+        # Obtain SubscriberAppln object
+        logger.debug ("Main: obtain the subscriber appln object")
+        app = SubscriberAppln(logger)
+        # configure the object
+        logger.debug ("Main: configure the publisher appln object")
         app.configure(args)
 
         # Run the driver to start the application
+        logger.debug ("Main: invoke the subscriber appln driver")
         app.driver()
+
     except Exception as e:
-        logger.error(f"Error in main: {e}")
+        logger.error ("Exception caught in main - {}".format (e))
+        return
 
 if __name__ == "__main__":
-    main()
+    # set underlying default logging capabilities
+    logging.basicConfig (level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+    main ()
