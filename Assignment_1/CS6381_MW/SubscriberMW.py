@@ -15,6 +15,7 @@ class SubscriberMW:
         self.topiclist = topiclist  # List of topics to subscribe to
         self.upcall_obj = None # handle to appln obj to handle appln-specific data
         self.handle_events = True  # Controls event loop
+
     def configure(self, args):
         """ Initialize the SubscriberMW """
         try:
@@ -45,6 +46,7 @@ class SubscriberMW:
             self.logger.info("SubscriberMW::configure completed")
         except Exception as e:
             raise e
+        
     def configure_sources(self, sources):
         """ Configure sources for the SubscriberMW """
         try:
@@ -61,6 +63,7 @@ class SubscriberMW:
             self.logger.info("SubscriberMW::configure_sources - completed")
         except Exception as e:
             raise e
+        
     def event_loop(self, timeout=None):
         """ Event loop to handle incoming responses from Discovery service and messages from publishers """
         try:
@@ -84,6 +87,7 @@ class SubscriberMW:
             self.logger.info("SubscriberMW::event_loop - completed")
         except Exception as e:
             raise e
+        
     def handle_reply(self):
         """ Handle reply from the Discovery service """
         try:
@@ -110,6 +114,7 @@ class SubscriberMW:
             return timeout
         except Exception as e:
             raise e
+        
     def handle_message(self):
         """ Handle incoming message from a publisher """
         try:
@@ -117,6 +122,7 @@ class SubscriberMW:
             self.logger.info(f"SubscriberMW::handle_message - received: {message}")
         except Exception as e:
             raise e
+        
     def register(self, name):
         """ Register with the discovery service as a subscriber """
         try:
@@ -160,6 +166,7 @@ class SubscriberMW:
             self.logger.info ("SubscriberMW::register - sent register message and now wait for reply")
         except Exception as e:
             raise e
+        
     def lookup(self, name):
         """ Retrieve Publisher info OR Broker info from Discovery Service as a subscriber """
         try:
@@ -192,9 +199,11 @@ class SubscriberMW:
             self.logger.info ("SubscriberMW::lookup - sent lookup message and now wait for reply")
         except Exception as e:
             raise e
+        
     def disable_event_loop(self):
         """ Disable the event loop """
         self.handle_events = False
+
     def set_upcall_handle (self, upcall_obj):
         ''' set upcall handle '''
         self.upcall_obj = upcall_obj

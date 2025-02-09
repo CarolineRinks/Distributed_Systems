@@ -19,6 +19,7 @@ class SubscriberAppln():
         ISREADY = 3,
         RECEIVING = 4,
         COMPLETED = 5
+        
     def __init__(self, logger):
         self.state = self.State.INITIALIZE # state that are we in
         self.logger = logger
@@ -27,6 +28,7 @@ class SubscriberAppln():
         self.lookup = None # one of the diff ways we do lookup
         self.dissemination = None # direct or via broker
         self.mw_obj = None  # SubscriberMW middleware object
+
     def configure(self, args):
         """ Initialize the SubscriberAppln object """
         try:
@@ -51,6 +53,7 @@ class SubscriberAppln():
             self.logger.info("SubscriberAppln::configure - configuration complete")
         except Exception as e:
             raise e
+        
     def driver(self):
         """ Driver function for SubscriberApp """
         try:
@@ -66,6 +69,7 @@ class SubscriberAppln():
             self.logger.info ("SubscriberAppln::driver completed")
         except Exception as e:
             raise e
+        
     def invoke_operation (self):
         ''' Invoke operation depending on state  '''
         try:
@@ -104,6 +108,7 @@ class SubscriberAppln():
             self.logger.info ("SubscriberAppln::invoke_operation completed")
         except Exception as e:
             raise e
+        
     def register_response (self, reg_resp):
         ''' handle register response '''
         try:
@@ -120,6 +125,7 @@ class SubscriberAppln():
                 raise ValueError ("Subscriber needs to have unique id")
         except Exception as e:
             raise e
+        
     def lookup_response (self, lookup_resp):
         ''' handle lookup response from Discovery service'''
         try:
@@ -140,6 +146,7 @@ class SubscriberAppln():
             self.logger.info ("SubscriberAppln::lookup_response - complete")
         except Exception as e:
             raise e
+        
     def isready_response (self, isready_resp):
         ''' handle isready response from Discovery service'''
         try:
@@ -160,6 +167,7 @@ class SubscriberAppln():
             return 0
         except Exception as e:
             raise e
+        
     def dump(self):
         """ Dump the contents of the application state """
         try:
@@ -172,6 +180,7 @@ class SubscriberAppln():
             self.logger.info ("**********************************")
         except Exception as e:
             raise e
+        
 def parseCmdLineArgs():
     """ Command line argument parser """
     parser = argparse.ArgumentParser(description="Subscriber Application")
@@ -183,6 +192,7 @@ def parseCmdLineArgs():
     parser.add_argument("-p", "--port", type=int, default=5578, help="Port number for the service")
     parser.add_argument("-l", "--loglevel", type=int, default=logging.INFO, choices=[logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR], help="Logging level")
     return parser.parse_args()
+
 def main():
     try:
         logger = logging.getLogger("SubscriberAppln")
@@ -205,6 +215,7 @@ def main():
     except Exception as e:
         logger.error ("Exception caught in main - {}".format (e))
         return
+    
 if __name__ == "__main__":
     # set underlying default logging capabilities
     logging.basicConfig (level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
