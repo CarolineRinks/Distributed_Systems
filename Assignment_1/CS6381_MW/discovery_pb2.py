@@ -24,19 +24,19 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0f\x64iscovery.proto\"T\n\x0eRegistrantInfo\x12\n\n\x02id\x18\x01 \x01(\t\x12\x11\n\x04\x61\x64\x64r\x18\x02 \x01(\tH\x00\x88\x01\x01\x12\x11\n\x04port\x18\x03 \x01(\rH\x01\x88\x01\x01\x42\x07\n\x05_addrB\x07\n\x05_port\"T\n\x0bRegisterReq\x12\x13\n\x04role\x18\x01 \x01(\x0e\x32\x05.Role\x12\x1d\n\x04info\x18\x02 \x01(\x0b\x32\x0f.RegistrantInfo\x12\x11\n\ttopiclist\x18\x03 \x03(\t\"G\n\x0cRegisterResp\x12\x17\n\x06status\x18\x01 \x01(\x0e\x32\x07.Status\x12\x13\n\x06reason\x18\x02 \x01(\tH\x00\x88\x01\x01\x42\t\n\x07_reason\"\x0c\n\nIsReadyReq\"\x1d\n\x0bIsReadyResp\x12\x0e\n\x06status\x18\x01 \x01(\x08\"4\n\nBrokerInfo\x12\n\n\x02id\x18\x01 \x01(\t\x12\x0c\n\x04\x61\x64\x64r\x18\x02 \x01(\t\x12\x0c\n\x04port\x18\x03 \x01(\r\"0\n\x11RegisterBrokerReq\x12\x1b\n\x06\x62roker\x18\x01 \x01(\x0b\x32\x0b.BrokerInfo\"/\n\x10LookupBrokerResp\x12\x1b\n\x06\x62roker\x18\x01 \x01(\x0b\x32\x0b.BrokerInfo\"(\n\x13LookupPubByTopicReq\x12\x11\n\ttopiclist\x18\x01 \x03(\t\"\xa8\x01\n\x14LookupPubByTopicResp\x12\x0e\n\x06status\x18\x01 \x01(\x08\x12\x37\n\npublishers\x18\x06 \x03(\x0b\x32#.LookupPubByTopicResp.PublisherInfo\x1aG\n\rPublisherInfo\x12\n\n\x02id\x18\x02 \x01(\t\x12\x0c\n\x04\x61\x64\x64r\x18\x03 \x01(\t\x12\x0c\n\x04port\x18\x04 \x01(\r\x12\x0e\n\x06topics\x18\x05 \x03(\t\"\xdf\x01\n\x0c\x44iscoveryReq\x12\x1b\n\x08msg_type\x18\x01 \x01(\x0e\x32\t.MsgTypes\x12$\n\x0cregister_req\x18\x02 \x01(\x0b\x32\x0c.RegisterReqH\x00\x12\"\n\x0bisready_req\x18\x03 \x01(\x0b\x32\x0b.IsReadyReqH\x00\x12*\n\nlookup_req\x18\x04 \x01(\x0b\x32\x14.LookupPubByTopicReqH\x00\x12\x31\n\x13register_broker_req\x18\x05 \x01(\x0b\x32\x12.RegisterBrokerReqH\x00\x42\t\n\x07\x43ontent\"\xe4\x01\n\rDiscoveryResp\x12\x1b\n\x08msg_type\x18\x01 \x01(\x0e\x32\t.MsgTypes\x12&\n\rregister_resp\x18\x02 \x01(\x0b\x32\r.RegisterRespH\x00\x12$\n\x0cisready_resp\x18\x03 \x01(\x0b\x32\x0c.IsReadyRespH\x00\x12,\n\x0blookup_resp\x18\x04 \x01(\x0b\x32\x15.LookupPubByTopicRespH\x00\x12/\n\x12lookup_resp_broker\x18\x05 \x01(\x0b\x32\x11.LookupBrokerRespH\x00\x42\t\n\x07\x43ontent*P\n\x04Role\x12\x10\n\x0cROLE_UNKNOWN\x10\x00\x12\x12\n\x0eROLE_PUBLISHER\x10\x01\x12\x13\n\x0fROLE_SUBSCRIBER\x10\x02\x12\r\n\tROLE_BOTH\x10\x03*\\\n\x06Status\x12\x12\n\x0eSTATUS_UNKNOWN\x10\x00\x12\x12\n\x0eSTATUS_SUCCESS\x10\x01\x12\x12\n\x0eSTATUS_FAILURE\x10\x02\x12\x16\n\x12STATUS_CHECK_AGAIN\x10\x03*\xab\x01\n\x08MsgTypes\x12\x10\n\x0cTYPE_UNKNOWN\x10\x00\x12\x11\n\rTYPE_REGISTER\x10\x01\x12\x10\n\x0cTYPE_ISREADY\x10\x02\x12\x1c\n\x18TYPE_LOOKUP_PUB_BY_TOPIC\x10\x03\x12\x18\n\x14TYPE_LOOKUP_ALL_PUBS\x10\x04\x12\x16\n\x12TYPE_LOOKUP_BROKER\x10\x05\x12\x18\n\x14TYPE_REGISTER_BROKER\x10\x06\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0f\x64iscovery.proto\"T\n\x0eRegistrantInfo\x12\n\n\x02id\x18\x01 \x01(\t\x12\x11\n\x04\x61\x64\x64r\x18\x02 \x01(\tH\x00\x88\x01\x01\x12\x11\n\x04port\x18\x03 \x01(\rH\x01\x88\x01\x01\x42\x07\n\x05_addrB\x07\n\x05_port\"T\n\x0bRegisterReq\x12\x13\n\x04role\x18\x01 \x01(\x0e\x32\x05.Role\x12\x1d\n\x04info\x18\x02 \x01(\x0b\x32\x0f.RegistrantInfo\x12\x11\n\ttopiclist\x18\x03 \x03(\t\"G\n\x0cRegisterResp\x12\x17\n\x06status\x18\x01 \x01(\x0e\x32\x07.Status\x12\x13\n\x06reason\x18\x02 \x01(\tH\x00\x88\x01\x01\x42\t\n\x07_reason\"\x0c\n\nIsReadyReq\"\x1d\n\x0bIsReadyResp\x12\x0e\n\x06status\x18\x01 \x01(\x08\"M\n\nBrokerInfo\x12\n\n\x02id\x18\x01 \x01(\t\x12\x0c\n\x04\x61\x64\x64r\x18\x02 \x01(\t\x12\x12\n\nfront_port\x18\x03 \x01(\r\x12\x11\n\tback_port\x18\x04 \x01(\r\"0\n\x11RegisterBrokerReq\x12\x1b\n\x06\x62roker\x18\x01 \x01(\x0b\x32\x0b.BrokerInfo\"/\n\x10LookupBrokerResp\x12\x1b\n\x06\x62roker\x18\x01 \x01(\x0b\x32\x0b.BrokerInfo\"(\n\x13LookupPubByTopicReq\x12\x11\n\ttopiclist\x18\x01 \x03(\t\"\xa8\x01\n\x14LookupPubByTopicResp\x12\x0e\n\x06status\x18\x01 \x01(\x08\x12\x37\n\npublishers\x18\x06 \x03(\x0b\x32#.LookupPubByTopicResp.PublisherInfo\x1aG\n\rPublisherInfo\x12\n\n\x02id\x18\x02 \x01(\t\x12\x0c\n\x04\x61\x64\x64r\x18\x03 \x01(\t\x12\x0c\n\x04port\x18\x04 \x01(\r\x12\x0e\n\x06topics\x18\x05 \x03(\t\"\xdf\x01\n\x0c\x44iscoveryReq\x12\x1b\n\x08msg_type\x18\x01 \x01(\x0e\x32\t.MsgTypes\x12$\n\x0cregister_req\x18\x02 \x01(\x0b\x32\x0c.RegisterReqH\x00\x12\"\n\x0bisready_req\x18\x03 \x01(\x0b\x32\x0b.IsReadyReqH\x00\x12*\n\nlookup_req\x18\x04 \x01(\x0b\x32\x14.LookupPubByTopicReqH\x00\x12\x31\n\x13register_broker_req\x18\x05 \x01(\x0b\x32\x12.RegisterBrokerReqH\x00\x42\t\n\x07\x43ontent\"\xe4\x01\n\rDiscoveryResp\x12\x1b\n\x08msg_type\x18\x01 \x01(\x0e\x32\t.MsgTypes\x12&\n\rregister_resp\x18\x02 \x01(\x0b\x32\r.RegisterRespH\x00\x12$\n\x0cisready_resp\x18\x03 \x01(\x0b\x32\x0c.IsReadyRespH\x00\x12,\n\x0blookup_resp\x18\x04 \x01(\x0b\x32\x15.LookupPubByTopicRespH\x00\x12/\n\x12lookup_resp_broker\x18\x05 \x01(\x0b\x32\x11.LookupBrokerRespH\x00\x42\t\n\x07\x43ontent*P\n\x04Role\x12\x10\n\x0cROLE_UNKNOWN\x10\x00\x12\x12\n\x0eROLE_PUBLISHER\x10\x01\x12\x13\n\x0fROLE_SUBSCRIBER\x10\x02\x12\r\n\tROLE_BOTH\x10\x03*\\\n\x06Status\x12\x12\n\x0eSTATUS_UNKNOWN\x10\x00\x12\x12\n\x0eSTATUS_SUCCESS\x10\x01\x12\x12\n\x0eSTATUS_FAILURE\x10\x02\x12\x16\n\x12STATUS_CHECK_AGAIN\x10\x03*\xab\x01\n\x08MsgTypes\x12\x10\n\x0cTYPE_UNKNOWN\x10\x00\x12\x11\n\rTYPE_REGISTER\x10\x01\x12\x10\n\x0cTYPE_ISREADY\x10\x02\x12\x1c\n\x18TYPE_LOOKUP_PUB_BY_TOPIC\x10\x03\x12\x18\n\x14TYPE_LOOKUP_ALL_PUBS\x10\x04\x12\x16\n\x12TYPE_LOOKUP_BROKER\x10\x05\x12\x18\n\x14TYPE_REGISTER_BROKER\x10\x06\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'discovery_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_ROLE']._serialized_start=1132
-  _globals['_ROLE']._serialized_end=1212
-  _globals['_STATUS']._serialized_start=1214
-  _globals['_STATUS']._serialized_end=1306
-  _globals['_MSGTYPES']._serialized_start=1309
-  _globals['_MSGTYPES']._serialized_end=1480
+  _globals['_ROLE']._serialized_start=1157
+  _globals['_ROLE']._serialized_end=1237
+  _globals['_STATUS']._serialized_start=1239
+  _globals['_STATUS']._serialized_end=1331
+  _globals['_MSGTYPES']._serialized_start=1334
+  _globals['_MSGTYPES']._serialized_end=1505
   _globals['_REGISTRANTINFO']._serialized_start=19
   _globals['_REGISTRANTINFO']._serialized_end=103
   _globals['_REGISTERREQ']._serialized_start=105
@@ -48,19 +48,19 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_ISREADYRESP']._serialized_start=278
   _globals['_ISREADYRESP']._serialized_end=307
   _globals['_BROKERINFO']._serialized_start=309
-  _globals['_BROKERINFO']._serialized_end=361
-  _globals['_REGISTERBROKERREQ']._serialized_start=363
-  _globals['_REGISTERBROKERREQ']._serialized_end=411
-  _globals['_LOOKUPBROKERRESP']._serialized_start=413
-  _globals['_LOOKUPBROKERRESP']._serialized_end=460
-  _globals['_LOOKUPPUBBYTOPICREQ']._serialized_start=462
-  _globals['_LOOKUPPUBBYTOPICREQ']._serialized_end=502
-  _globals['_LOOKUPPUBBYTOPICRESP']._serialized_start=505
-  _globals['_LOOKUPPUBBYTOPICRESP']._serialized_end=673
-  _globals['_LOOKUPPUBBYTOPICRESP_PUBLISHERINFO']._serialized_start=602
-  _globals['_LOOKUPPUBBYTOPICRESP_PUBLISHERINFO']._serialized_end=673
-  _globals['_DISCOVERYREQ']._serialized_start=676
-  _globals['_DISCOVERYREQ']._serialized_end=899
-  _globals['_DISCOVERYRESP']._serialized_start=902
-  _globals['_DISCOVERYRESP']._serialized_end=1130
+  _globals['_BROKERINFO']._serialized_end=386
+  _globals['_REGISTERBROKERREQ']._serialized_start=388
+  _globals['_REGISTERBROKERREQ']._serialized_end=436
+  _globals['_LOOKUPBROKERRESP']._serialized_start=438
+  _globals['_LOOKUPBROKERRESP']._serialized_end=485
+  _globals['_LOOKUPPUBBYTOPICREQ']._serialized_start=487
+  _globals['_LOOKUPPUBBYTOPICREQ']._serialized_end=527
+  _globals['_LOOKUPPUBBYTOPICRESP']._serialized_start=530
+  _globals['_LOOKUPPUBBYTOPICRESP']._serialized_end=698
+  _globals['_LOOKUPPUBBYTOPICRESP_PUBLISHERINFO']._serialized_start=627
+  _globals['_LOOKUPPUBBYTOPICRESP_PUBLISHERINFO']._serialized_end=698
+  _globals['_DISCOVERYREQ']._serialized_start=701
+  _globals['_DISCOVERYREQ']._serialized_end=924
+  _globals['_DISCOVERYRESP']._serialized_start=927
+  _globals['_DISCOVERYRESP']._serialized_end=1155
 # @@protoc_insertion_point(module_scope)

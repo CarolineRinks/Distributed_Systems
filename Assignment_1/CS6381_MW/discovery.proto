@@ -1,151 +1,128 @@
-// Course: CS6381 Distributed Systems Principles
-// Instructor: Aniruddha Gokhale
-// Created: Spring 2023
-//
-// Purpose:
-// Describe an initial schema for message exchange with the Discovery service.
-
-
-// Let us use the Version 3 syntax
 syntax = "proto3";
 
-// We will define all the enumeration types we need at the start
+// ----------------------------------------------------------------------
+// Enumerations
+// ----------------------------------------------------------------------
 
-// An enumeration for the role we are playing
+// Role enumeration: identifies whether an entity is a publisher, subscriber, or broker.
 enum Role {
     ROLE_UNKNOWN = 0;
     ROLE_PUBLISHER = 1;
     ROLE_SUBSCRIBER = 2;
-    ROLE_BOTH = 3;  // played by the broker.
+    ROLE_BOTH = 3;  // Used for the broker.
 }
 
-// an enumeration for the status of the message request
+// Status enumeration: indicates the outcome of a request.
 enum Status {
     STATUS_UNKNOWN = 0;
     STATUS_SUCCESS = 1;
     STATUS_FAILURE = 2;
-    STATUS_CHECK_AGAIN = 3;   // when the server is not ready to provide info as yet
+    STATUS_CHECK_AGAIN = 3;   // When the server is not ready to provide info yet.
 }
 
-// define an enum of all message types supported on a discovery service.
-// This could be REGISTER_REQ, LOOKUP_PUB_BY_TOPIC, READY
+// Message Types: lists all the kinds of messages the Discovery service supports.
 enum MsgTypes {
-     TYPE_UNKNOWN = 0;
-     TYPE_REGISTER = 1;  
-     TYPE_ISREADY = 2;    
-     TYPE_LOOKUP_PUB_BY_TOPIC = 3;
-     TYPE_LOOKUP_ALL_PUBS = 4;
-     TYPE_LOOKUP_BROKER = 5;  // 🔹 New Message Type for Broker lookup
-     TYPE_REGISTER_BROKER = 6;
+    TYPE_UNKNOWN = 0;
+    TYPE_REGISTER = 1;  
+    TYPE_ISREADY = 2;    
+    TYPE_LOOKUP_PUB_BY_TOPIC = 3;
+    TYPE_LOOKUP_ALL_PUBS = 4;      // Optional: can be removed if not used.
+    TYPE_LOOKUP_BROKER = 5;        // For broker lookup.
+    TYPE_REGISTER_BROKER = 6;      // For broker registration.
 }
 
-// use to encode the details of the publisher or subscriber
-// IP addr and port number are needed for publisher side only
+// ----------------------------------------------------------------------
+// Registration and Lookup Messages
+// ----------------------------------------------------------------------
+
+// RegistrantInfo: carries basic identity and connection info.
 message RegistrantInfo {
-    string id = 1;  // name of the entity
-    optional string addr = 2; // IP address (only for publisher)
-    optional uint32 port = 3; // port number (only for publisher)
+    string id = 1;                         // Unique name of the entity.
+    optional string addr = 2;                // IP address (for publishers).
+    optional uint32 port = 3;                // Port number (for publishers).
 }
 
-// Likewise, instead of just comma separated list of topics, maybe a better way to send the topic list
-// Finally, maybe a nested structure that includes the name, IP and port and any additional info about
-// the pub/sub entity here.
-message RegisterReq
-{
-    Role role = 1;   // enum indicating what role we are playing
-    RegistrantInfo info = 2; // info about the registrant
-    repeated string topiclist = 3; // an array of topic names (published or subscribed to)
+// RegisterReq: sent by publishers or subscribers to register with the Discovery service.
+message RegisterReq {
+    Role role = 1;                         // Role of the entity.
+    RegistrantInfo info = 2;                // Registration info.
+    repeated string topiclist = 3;          // List of topics published or subscribed to.
 }
 
-// Response to registration can be a success or a failure accompanied by a reason.
-message RegisterResp
-{
-    Status status = 1;   // success or failure
-    optional string reason = 2; // reason for failure
+// RegisterResp: sent as a response to a registration request.
+message RegisterResp {
+    Status status = 1;                     // Success or failure.
+    optional string reason = 2;             // Reason for failure (if any).
 }
 
-// define a message type that publishers might send to a discovery service
-// to see if the system is all ready and if they can proceed to publish their
-// topics. Accordingly, there will be a req and resp message types.
-message IsReadyReq
-{
-   // we really don't need to send any field
+// IsReadyReq: request to check if the system is ready.
+message IsReadyReq {
+    // No fields needed.
 }
 
-// Response to the IsReady request
-message IsReadyResp
-{
-    bool status = 1; // yes or no
+// IsReadyResp: response indicating whether the system is ready.
+message IsReadyResp {
+    bool status = 1;                       // True if ready, false otherwise.
 }
 
-// TO-DO
-// define more message types. For example, a subscriber middleware may want to know
-// all the publishers that publish the topic that subscriber is interested in. In that case,
-// a request will be a single topic or list of topics, and the response will be list of
-// publishers with their name/IP/port for each topic requested. In the Direct approach, the
-// discovery service will send whereabouts of each publisher; in the Broker approach, the
-// whereabouts of the broker will be sent. Accordingly there will be request and response
-// message types
-
-// Message for Broker information
+// BrokerInfo: carries the broker’s identity and connection information.
 message BrokerInfo {
     string id = 1;
     string addr = 2;
-    uint32 port = 3;
+    uint32 front_port = 3;
+    uint32 back_port = 4;
 }
 
-// Message for Broker Registration
+// RegisterBrokerReq: request used by the broker to register itself.
 message RegisterBrokerReq {
     BrokerInfo broker = 1;
 }
 
-// Response to Broker Lookup
+// LookupBrokerResp: response to a broker lookup request.
 message LookupBrokerResp {
     BrokerInfo broker = 1;
 }
 
-message LookupPubByTopicReq
-{
-    repeated string topiclist = 1; // modify this appropriately
+// LookupPubByTopicReq: request to obtain a list of publishers for specified topics.
+message LookupPubByTopicReq {
+    repeated string topiclist = 1;
 }
 
-// TO-DO
-// Have a corresponding response to the lookupPubByTopic request
-// accordingly there will be a response to the above message
-message LookupPubByTopicResp
-{
-    bool status =  1;
+// LookupPubByTopicResp: response to a publisher lookup request.
+message LookupPubByTopicResp {
+    bool status = 1;
+    // Nested message carrying publisher details.
     message PublisherInfo {
-        string id = 2;       // Publisher ID
-        string addr = 3;     // Publisher IP address
-        uint32 port = 4;     // Publisher Port
-        repeated string topics = 5; // Topics published by this publisher
+        string id = 2;
+        string addr = 3;
+        uint32 port = 4;
+        repeated string topics = 5;
     }
-    repeated PublisherInfo publishers = 6; // List of publishers publishing the requested topics
+    repeated PublisherInfo publishers = 6;
 }
 
-// Finally, we are going to make a union of all these request and response messages
+// ----------------------------------------------------------------------
+// Discovery Request and Response Union Messages
+// ----------------------------------------------------------------------
 
-
-// Discovery Request
+// DiscoveryReq: the union request message for Discovery service operations.
 message DiscoveryReq {
     MsgTypes msg_type = 1;
     oneof Content {
         RegisterReq register_req = 2;
         IsReadyReq isready_req = 3;
         LookupPubByTopicReq lookup_req = 4;
-        RegisterBrokerReq register_broker_req = 5;  // 🔹 New Request for Broker registration
+        RegisterBrokerReq register_broker_req = 5;  // For broker registration.
     }
 }
 
-// Discovery Response
+// DiscoveryResp: the union response message for Discovery service operations.
 message DiscoveryResp {
     MsgTypes msg_type = 1;
     oneof Content {
         RegisterResp register_resp = 2;
         IsReadyResp isready_resp = 3;
         LookupPubByTopicResp lookup_resp = 4;
-        LookupBrokerResp lookup_resp_broker = 5;  // 🔹 New Response for Broker lookup
+        LookupBrokerResp lookup_resp_broker = 5;  // For broker lookup.
     }
 }
-

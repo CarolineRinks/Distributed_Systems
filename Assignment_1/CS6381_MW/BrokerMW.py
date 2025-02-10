@@ -1,125 +1,115 @@
 import zmq
 import logging
 import configparser
+import time
 from CS6381_MW import discovery_pb2
 
 class BrokerMW:
-    """ Middleware for the broker, used in ViaBroker mode with topic matching """
+    """Middleware for the broker (ViaBroker mode). This implementation forwards every
+    message received on its frontend socket. Subscribers apply their own topic filters via
+    ZMQ's native subscription mechanism."""
 
     def __init__(self, logger):
-        """ Constructor """
+        """Constructor."""
         self.logger = logger
         self.context = zmq.Context()
-
-        # Sockets for communication
-
         self.poller = zmq.Poller()
+        self.discovery_req = None
 
-        # Read configuration
-        # config = configparser.ConfigParser()
-        # config.read('config.ini')
-        
-
-        # Track topic subscriptions
-        self.topic_subscribers = {}  # { "temperature": [sub1, sub2], "humidity": [sub3] }
-        self.publisher_topics = {}  # { "pub1": ["temperature", "humidity"] }
-
-    def configure(self,config):
-        """ Configure the broker to forward messages from publishers to subscribers """
+    def configure(self, config):
+        """Configure the broker using parameters from the config file."""
         self.logger.info("BrokerMW::configure - Setting up Broker")
 
-        self.frontend = self.context.socket(zmq.SUB)  # Receives from publishers
-        self.backend = self.context.socket(zmq.PUB)  # Forwards to subscribers
-        self.discovery_req = self.context.socket(zmq.REQ)  # Talks to Discovery Service
+        # Create and connect a REQ socket to the Discovery service.
+        self.discovery_req = self.context.socket(zmq.REQ)
+        self.discovery_req.connect(f"tcp://{config['Settings']['discovery_addr']}")
+        self.logger.info(f"BrokerMW::configure - Connected to Discovery at {config['Settings']['discovery_addr']}")
 
+        # Create the frontend (SUB) socket for receiving publisher messages and backend (PUB) socket for sending to subscribers.
+        self.frontend = self.context.socket(zmq.SUB)
+        self.backend = self.context.socket(zmq.PUB)
+
+        # Read broker connection parameters.
         self.broker_ip = config['Settings']['broker_ip']
-        self.frontend_port = config['Settings']['frontend_port']  # Where publishers connect
-        self.backend_port = config['Settings']['backend_port']  # Where subscribers connect
-        self.discovery_addr = config['Settings']['discovery_addr']
+        self.frontend_port = config['Settings']['frontend_port']  # For publisher messages.
+        self.backend_port = config['Settings']['backend_port']    # For subscriber messages.
 
-        # Connect to Discovery Service
-        self.discovery_req.connect(f"tcp://{self.discovery_addr}")
-        self.logger.info(f"BrokerMW::configure - Connected to Discovery at {self.discovery_addr}")
-
-        # Bind frontend (SUB socket) for publishers
+        # Bind the frontend socket and subscribe to all topics.
         self.frontend.bind(f"tcp://{self.broker_ip}:{self.frontend_port}")
-        self.frontend.setsockopt_string(zmq.SUBSCRIBE, "")  # Subscribe to all topics
-
-        # Bind backend (PUB socket) for subscribers
+        self.frontend.setsockopt_string(zmq.SUBSCRIBE, "")
+        # Bind the backend socket.
         self.backend.bind(f"tcp://{self.broker_ip}:{self.backend_port}")
 
-        # Register frontend socket with poller to listen for publisher messages
+        # Register the frontend socket with the poller.
         self.poller.register(self.frontend, zmq.POLLIN)
 
-    def wait_for_discovery_ready(self):
-        """ Wait until Discovery Service confirms readiness """
-        self.logger.info("BrokerMW::wait_for_discovery_ready - Checking Discovery status")
+        self.logger.info("BrokerMW::configure completed")
 
+    def register_broker(self, broker_id, addr, broker_front_end_port, broker_back_end_port):
+        """Register the broker with the Discovery service."""
+        broker_info = discovery_pb2.BrokerInfo()
+        broker_info.id = broker_id
+        broker_info.addr = addr
+        broker_info.front_port = int(broker_front_end_port)
+        broker_info.back_port = int(broker_back_end_port)
+        
+        register_broker_req = discovery_pb2.RegisterBrokerReq()
+        register_broker_req.broker.CopyFrom(broker_info)
+        
+        disc_req = discovery_pb2.DiscoveryReq()
+        disc_req.msg_type = discovery_pb2.TYPE_REGISTER_BROKER
+        disc_req.register_broker_req.CopyFrom(register_broker_req)
+        
+        self.discovery_req.send(disc_req.SerializeToString())
+        self.logger.info("BrokerMW::register_broker - Broker registration sent to Discovery.")
+        # Receive the reply to clear the REQ socket.
+        reply = self.discovery_req.recv()
+        self.logger.info("BrokerMW::register_broker - Received registration reply.")
+
+    def wait_for_discovery_ready(self):
+        """Wait until the Discovery Service confirms readiness."""
+        self.logger.info("BrokerMW::wait_for_discovery_ready - Checking Discovery status")
         while True:
-            # Send isReady request to Discovery
             req_msg = discovery_pb2.DiscoveryReq()
             req_msg.msg_type = discovery_pb2.TYPE_ISREADY
             self.discovery_req.send(req_msg.SerializeToString())
-
-            # Wait for response
             resp_bytes = self.discovery_req.recv()
             resp_msg = discovery_pb2.DiscoveryResp()
             resp_msg.ParseFromString(resp_bytes)
-
             if resp_msg.isready_resp.status:
                 self.logger.info("BrokerMW::wait_for_discovery_ready - Discovery is READY")
                 break
             else:
                 self.logger.info("BrokerMW::wait_for_discovery_ready - Not ready, retrying...")
+                time.sleep(1)
 
     def fetch_publishers(self):
-        """ Request publisher information from Discovery Service """
+        """Fetch publisher information from Discovery (optional for filtering)."""
         self.logger.info("BrokerMW::fetch_publishers - Retrieving publishers from Discovery")
-
         req_msg = discovery_pb2.DiscoveryReq()
-        req_msg.msg_type = discovery_pb2.TYPE_LOOKUP_ALL_PUBS  # New message type for all publishers
-
+        req_msg.msg_type = discovery_pb2.TYPE_LOOKUP_PUB_BY_TOPIC
+        lookup_req = discovery_pb2.LookupPubByTopicReq()
+        lookup_req.topiclist[:] = []  # empty list returns all publishers
+        req_msg.lookup_req.CopyFrom(lookup_req)
         self.discovery_req.send(req_msg.SerializeToString())
         resp_bytes = self.discovery_req.recv()
         resp_msg = discovery_pb2.DiscoveryResp()
-        publisher_list = resp_msg.lookup_resp.publishers  # Extract registered publishers
-
-        for pub in publisher_list:
-            for topic in pub.topics:
-                if topic not in self.publisher_topics:
-                    self.publisher_topics[topic] = []
-                self.publisher_topics[topic].append({"id": pub.id, "addr": pub.addr, "port": pub.port})
-
-        self.logger.info(f"BrokerMW::fetch_publishers - Publishers registered: {self.publisher_topics}")
-
-    def register_subscriber(self, sub_id, topic_list):
-        """ Register a subscriber's interest in topics """
-        self.logger.info(f"BrokerMW::register_subscriber - {sub_id} subscribed to {topic_list}")
-        for topic in topic_list:
-            if topic not in self.topic_subscribers:
-                self.topic_subscribers[topic] = []
-            self.topic_subscribers[topic].append(sub_id)  # Store subscriber info
+        resp_msg.ParseFromString(resp_bytes)
+        publisher_list = resp_msg.lookup_resp.publishers
+        self.logger.info(f"BrokerMW::fetch_publishers - Publishers: {[pub.id for pub in publisher_list]}")
 
     def event_loop(self):
-        """ Main event loop to filter and forward messages from publishers to subscribers """
+        """Main event loop to forward publisher messages to subscribers."""
         self.logger.info("BrokerMW::event_loop - Waiting for Discovery to be ready")
-        self.wait_for_discovery_ready()  # Ensure Discovery confirms all pubs/subs are ready
-
+        self.wait_for_discovery_ready()
         self.logger.info("BrokerMW::event_loop - Fetching registered publishers")
         self.fetch_publishers()
-
         self.logger.info("BrokerMW::event_loop - Running broker loop")
-
         while True:
             events = dict(self.poller.poll())
             if self.frontend in events:
-                # Receive a message from a publisher
-                message = self.frontend.recv_string()  # Format: "topic:data"
-                topic, data = message.split(":", 1)
-
-                # Check if the topic has interested subscribers
-                if topic in self.topic_subscribers:
-                    self.logger.info(f"Forwarding '{topic}' data to subscribers: {self.topic_subscribers[topic]}")
-                    self.backend.send_string(f"{topic}:{data}")  # Forward only to interested subscribers
-                else:
-                    self.logger.info(f"No subscribers for topic '{topic}', dropping message")
+                message = self.frontend.recv_string()
+                self.logger.info(f"BrokerMW::event_loop - Received message: {message}")
+                # Forward the message unconditionally.
+                self.backend.send_string(message)
+                self.logger.info("BrokerMW::event_loop - Forwarded message to subscribers")
