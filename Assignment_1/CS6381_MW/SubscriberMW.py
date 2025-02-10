@@ -3,6 +3,7 @@ import os
 import sys
 import time
 import logging
+import csv 
 from CS6381_MW import discovery_pb2
 class SubscriberMW:
     def __init__(self, logger, topiclist):
@@ -114,14 +115,20 @@ class SubscriberMW:
             return timeout
         except Exception as e:
             raise e
+
         
     def handle_message(self):
-        """ Handle incoming message from a publisher """
-        try:
-            message = self.sub.recv_string()
-            self.logger.info(f"SubscriberMW::handle_message - received: {message}")
-        except Exception as e:
-            raise e
+    """ Handle incoming message from a publisher """
+    try:
+        message = self.sub.recv_string()
+        self.logger.info(f"SubscriberMW::handle_message - received: {message}")
+        # Process the message and log performance data
+        receive_time = time.time_ns()
+        publish_time = int(message.split(",")[0])
+        latency = receive_time - publish_time
+        self.log_performance_data(publish_time, receive_time, latency)
+    except Exception as e:
+        raise e
         
     def register(self, name):
         """ Register with the discovery service as a subscriber """
@@ -211,3 +218,12 @@ class SubscriberMW:
     def set_upcall_handle (self, upcall_obj):
         ''' set upcall handle '''
         self.upcall_obj = upcall_obj
+    
+    def log_performance_data(self, publish_time, receive_time, latency):
+    """ Log performance data to a CSV file """
+    try:
+        with open("results.csv", "a") as f:
+            writer = csv.writer(f)
+            writer.writerow([publish_time, receive_time, latency])
+    except Exception as e:
+        raise e
