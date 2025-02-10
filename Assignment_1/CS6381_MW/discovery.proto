@@ -31,12 +31,12 @@ enum Status {
 // This could be REGISTER_REQ, LOOKUP_PUB_BY_TOPIC, READY
 enum MsgTypes {
      TYPE_UNKNOWN = 0;
-     TYPE_REGISTER = 1;  // used by pub, sub and broker.
-     TYPE_ISREADY = 2;    // needed by publisher to know if it can proceed
-     TYPE_LOOKUP_PUB_BY_TOPIC = 3;  // needed by a subscriber
-     TYPE_LOOKUP_ALL_PUBS = 4;   // probably needed by broker
-     TYPE_LOOKUP_ALL_SUBS = 5;  // needed by broker
-     // anything more
+     TYPE_REGISTER = 1;  
+     TYPE_ISREADY = 2;    
+     TYPE_LOOKUP_PUB_BY_TOPIC = 3;
+     TYPE_LOOKUP_ALL_PUBS = 4;
+     TYPE_LOOKUP_BROKER = 5;  // 🔹 New Message Type for Broker lookup
+     TYPE_REGISTER_BROKER = 6;
 }
 
 // use to encode the details of the publisher or subscriber
@@ -87,6 +87,23 @@ message IsReadyResp
 // whereabouts of the broker will be sent. Accordingly there will be request and response
 // message types
 
+// Message for Broker information
+message BrokerInfo {
+    string id = 1;
+    string addr = 2;
+    uint32 port = 3;
+}
+
+// Message for Broker Registration
+message RegisterBrokerReq {
+    BrokerInfo broker = 1;
+}
+
+// Response to Broker Lookup
+message LookupBrokerResp {
+    BrokerInfo broker = 1;
+}
+
 message LookupPubByTopicReq
 {
     repeated string topiclist = 1; // modify this appropriately
@@ -109,27 +126,26 @@ message LookupPubByTopicResp
 
 // Finally, we are going to make a union of all these request and response messages
 
-// Discovery message (one of many)
-message DiscoveryReq
-{
-        MsgTypes msg_type = 1;
-        oneof Content {
-              RegisterReq register_req = 2;
-              IsReadyReq isready_req = 3;
-              LookupPubByTopicReq lookup_req = 4;
-              // add more 
-        }
+
+// Discovery Request
+message DiscoveryReq {
+    MsgTypes msg_type = 1;
+    oneof Content {
+        RegisterReq register_req = 2;
+        IsReadyReq isready_req = 3;
+        LookupPubByTopicReq lookup_req = 4;
+        RegisterBrokerReq register_broker_req = 5;  // 🔹 New Request for Broker registration
+    }
 }
 
-// Response to discovery req will be similar oneof of the responses.
-message DiscoveryResp
-{
-        MsgTypes msg_type = 1;
-        oneof Content {
-              RegisterResp register_resp = 2;
-              IsReadyResp isready_resp = 3;
-              LookupPubByTopicResp lookup_resp = 4;
-              // add more 
-        }
+// Discovery Response
+message DiscoveryResp {
+    MsgTypes msg_type = 1;
+    oneof Content {
+        RegisterResp register_resp = 2;
+        IsReadyResp isready_resp = 3;
+        LookupPubByTopicResp lookup_resp = 4;
+        LookupBrokerResp lookup_resp_broker = 5;  // 🔹 New Response for Broker lookup
+    }
 }
 

@@ -1,121 +1,184 @@
 import zmq
 import logging
+import configparser
 from CS6381_MW import discovery_pb2
 
 class DiscoveryMW:
     """ Middleware for Discovery Service """
+
     def __init__(self, logger):
         """ Constructor """
-        self.logger = logger  # Logger for debugging
-        self.rep = None  # ZMQ REP socket to handle incoming requests
-        self.poller = None  # ZMQ Poller for handling events
+        self.logger = logger
+        self.context = zmq.Context()
+        self.rep_socket = self.context.socket(zmq.REP)  # REP socket to handle requests
+        self.poller = zmq.Poller()
+
         self.expected_pubs = 0  # Expected number of publishers
         self.expected_subs = 0  # Expected number of subscribers
         self.registered_pubs = 0  # Counter for registered publishers
         self.registered_subs = 0  # Counter for registered subscribers
-        self.publishers = {}  # Dictionary to store registered publishers
-        self.subscribers = {}  # Dictionary to store registered subscribers
-        self.handle_events = True  # Controls the event loop
 
-    def configure(self, args):
-        """ Configure ZMQ sockets and initialize the Discovery service """
-        try:
-            self.logger.info("DiscoveryMW::configure")
-            # Set expected number of publishers and subscribers from arguments
-            self.expected_pubs = args.num_pubs
-            self.expected_subs = args.num_subs
-            # Set up ZMQ context
-            context = zmq.Context()
-            # Create a REP socket (used for handling registration requests)
-            self.rep = context.socket(zmq.REP)
-            # Bind the REP socket to listen on the specified port
-            bind_str = f"tcp://*:{args.port}"
-            self.rep.bind(bind_str)
-            # Register the REP socket with a poller
-            self.poller = zmq.Poller()
-            self.poller.register(self.rep, zmq.POLLIN)
-            self.logger.info(f"DiscoveryMW:: Listening on {bind_str}")
-            self.logger.info(f"Expecting {self.expected_pubs} publishers and {self.expected_subs} subscribers")
-        except Exception as e:
-            raise e
-        
-    def event_loop(self, timeout=None):
-        """ Main event loop to handle incoming requests """
-        try:
-            self.logger.info("DiscoveryMW::event_loop - Running")
-            while self.handle_events:
-                # Poll for incoming requests
-                events = dict(self.poller.poll(timeout=timeout))
-                if self.rep in events:
-                    self.handle_request()
-            self.logger.info("DiscoveryMW::event_loop - Exiting")
-        except Exception as e:
-            raise e
-        
+        # Read configuration
+        config = configparser.ConfigParser()
+        config.read('config.ini')
+        self.discovery_ip = config['Settings']['discovery_ip']
+        self.discovery_port = config['Settings']['discovery_port']
+
+        # Track registered entities
+        self.publishers = {}   # { "pub1": {addr: IP, port: PORT, topics: [t1, t2] } }
+        self.subscribers = {}  # { "sub1": {topics: [t1, t2]} }
+        self.broker = None  # Stores broker info when registered
+
+    def configure(self,args):
+        """ Configure the Discovery Service """
+
+        self.expected_pubs = args.num_pubs
+        self.expected_subs = args.num_subs
+        self.logger.info("DiscoveryMW::configure - Setting up Discovery Service")
+
+        # Bind REP socket for handling requests
+        self.rep_socket.bind(f"tcp://{self.discovery_ip}:{self.discovery_port}")
+        self.poller.register(self.rep_socket, zmq.POLLIN)
+        self.logger.info(f"DiscoveryMW:: Listening on tcp://{self.discovery_ip}:{self.discovery_port}")
+
+    def event_loop(self):
+        """ Event loop to process incoming requests """
+        self.logger.info("DiscoveryMW::event_loop - Running")
+
+        while True:
+            events = dict(self.poller.poll())
+            if self.rep_socket in events:
+                self.handle_request()
+
     def handle_request(self):
-        """ Process incoming registration and readiness requests """
+        """ Handle incoming requests from Publishers, Subscribers, and Broker """
         try:
             self.logger.info("DiscoveryMW::handle_request - Processing request")
-            # Receive the request from the publisher or subscriber
-            request_bytes = self.rep.recv()
-            # Deserialize the request using Protobuf
+
+            # Receive request
+            request_bytes = self.rep_socket.recv()
             discovery_request = discovery_pb2.DiscoveryReq()
             discovery_request.ParseFromString(request_bytes)
-            # Determine the request type
+
+            # Determine the request type and process accordingly
             if discovery_request.msg_type == discovery_pb2.TYPE_REGISTER:
-                self.logger.info("DiscoveryMW::handle_request - Processing registration")
+                self.logger.info("DiscoveryMW::handle_request - Processing Registration")
                 response = self.process_registration(discovery_request.register_req)
+
             elif discovery_request.msg_type == discovery_pb2.TYPE_ISREADY:
-                self.logger.info("DiscoveryMW::handle_request - Processing readiness check")
+                self.logger.info("DiscoveryMW::handle_request - Processing Readiness Check")
                 response = self.process_is_ready()
+
             elif discovery_request.msg_type == discovery_pb2.TYPE_LOOKUP_PUB_BY_TOPIC:
-                self.logger.info("DiscoveryMW::handle_request - Processing topic lookup request")
+                self.logger.info("DiscoveryMW::handle_request - Processing Topic Lookup")
                 response = self.process_lookup_request(discovery_request.lookup_req)
+
+            elif discovery_request.msg_type == discovery_pb2.TYPE_LOOKUP_BROKER:
+                self.logger.info("DiscoveryMW::handle_request - Processing Broker Lookup")
+                response = self.process_lookup_broker()
+
+            elif discovery_request.msg_type == discovery_pb2.TYPE_REGISTER_BROKER:
+                self.logger.info("DiscoveryMW::handle_request - Processing Broker Registration")
+                response = self.process_register_broker(discovery_request.register_broker_req)
+
             else:
                 self.logger.error("DiscoveryMW::handle_request - Unknown request type received")
                 response = self.create_error_response("Unknown request type")
-            # Send response back to the requester
-            self.rep.send(response.SerializeToString())
+
+            # Send response back to requester
+            self.rep_socket.send(response.SerializeToString())
+
         except Exception as e:
             raise e
-        
+
     def process_registration(self, register_req):
-        """ Process registration from publishers or subscribers """
+        """ Register a publisher or subscriber """
         try:
             self.logger.info("DiscoveryMW::process_registration - Storing registration info")
-            # Extract entity details
             entity_id = register_req.info.id
-            entity_ip=register_req.info.addr
-            entity_port=register_req.info.port
             role = register_req.role
-            entity_topics = list(register_req.topiclist)
+            topics = list(register_req.topiclist)
+
             if role == discovery_pb2.ROLE_PUBLISHER:
-                if entity_id in self.publishers:
-                    return self.create_register_response(False, "Publisher already registered")
-                # Store publisher details
-                self.publishers[entity_id] = {}
-                self.publishers[entity_id]["Topics"] = entity_topics
-                self.publishers[entity_id]["IP"] = entity_ip
-                self.publishers[entity_id]["Port"] = entity_port
-                # entity_topics, entity_ip,entity_port
-                self.logger.info(f"---- PUBLISHER INFO {self.publishers} -----")
+                self.publishers[entity_id] = {
+                    "addr": register_req.info.addr,
+                    "port": register_req.info.port,
+                    "topics": topics
+                }
+                self.logger.info(f"Registered Publisher: {entity_id} with topics {topics}")
                 self.registered_pubs += 1
+
             elif role == discovery_pb2.ROLE_SUBSCRIBER:
-                if entity_id in self.subscribers:
-                    return self.create_register_response(False, "Subscriber already registered")
-                # Store subscriber details
-                self.subscribers[entity_id] = {}
-                # self.subscribers[entity_id]["Topics"] = entity_topics
-                # self.subscribers[entity_id]["IP"] = entity_ip
-                # self.subscribers[entity_id]["Port"] = entity_port
-                self.logger.info(f"---- SUBSRCIBER INFO {self.subscribers} -----")
+                self.subscribers[entity_id] = {
+                    "topics": topics
+                }
+                self.logger.info(f"Registered Subscriber: {entity_id} with topics {topics}")
                 self.registered_subs += 1
-            self.logger.info(f"Registered {entity_id} as {'Publisher' if role == discovery_pb2.ROLE_PUBLISHER else 'Subscriber'}")
-            # Return success response
+
             return self.create_register_response(True)
+
         except Exception as e:
             raise e
-        
+
+    def process_register_broker(self, register_broker_req):
+        """ Register the Broker """
+        try:
+            self.logger.info("DiscoveryMW::process_register_broker - Storing Broker info")
+            self.broker = {
+                "id": register_broker_req.broker.id,
+                "addr": register_broker_req.broker.addr,
+                "port": register_broker_req.broker.port
+            }
+            self.logger.info(f"Registered Broker: {self.broker}")
+            return self.create_register_response(True)
+
+        except Exception as e:
+            raise e
+
+    def process_lookup_request(self, lookup_req):
+        """ Return the list of publishers for requested topics """
+        try:
+            self.logger.info("DiscoveryMW::process_lookup_request - Finding matching publishers")
+
+            response = discovery_pb2.DiscoveryResp()
+            response.msg_type = discovery_pb2.TYPE_LOOKUP_PUB_BY_TOPIC
+            response.lookup_resp.CopyFrom(discovery_pb2.LookupPubByTopicResp())
+
+            for pub_id, pub_data in self.publishers.items():
+                if any(topic in pub_data["topics"] for topic in lookup_req.topiclist):
+                    pub_info = response.lookup_resp.publishers.add()
+                    pub_info.id = pub_id
+                    pub_info.addr = pub_data["addr"]
+                    pub_info.port = pub_data["port"]
+                    pub_info.topics.extend(pub_data["topics"])
+
+            return response
+
+        except Exception as e:
+            raise e
+
+    def process_lookup_broker(self):
+        """ Return the registered Broker info """
+        try:
+            self.logger.info("DiscoveryMW::process_lookup_broker - Returning Broker info")
+
+            response = discovery_pb2.DiscoveryResp()
+            response.msg_type = discovery_pb2.TYPE_LOOKUP_BROKER
+
+            if self.broker:
+                response.lookup_resp_broker.broker.id = self.broker["id"]
+                response.lookup_resp_broker.broker.addr = self.broker["addr"]
+                response.lookup_resp_broker.broker.port = self.broker["port"]
+                self.logger.info(f"Sending Broker info: {self.broker}")
+            else:
+                self.logger.warning("No Broker registered!")
+                response.lookup_resp_broker.broker.id = "NONE"
+
+            return response
+
+        except Exception as e:
+            raise e
+
     def process_is_ready(self):
             """ Check if all expected publishers and subscribers are registered """
             self.logger.info("DiscoveryMW::process_is_ready - Checking if system is ready")
@@ -130,64 +193,17 @@ class DiscoveryMW:
             response.isready_resp.status = ready
             return response
 
-    def process_lookup_request(self, lookup_req):
-        """ Process subscriber lookup request for publishers by topic """
-
-        try:
-            self.logger.info("DiscoveryMW::process_lookup_request - Processing topic lookup request")
-
-            # Extract requested topics
-            requested_topics = set(lookup_req.topiclist)
-            matched_publishers = []
-
-            # Search for publishers that match these topics
-            for pub_id, pub_data in self.publishers.items():
-                pub_topics = set(pub_data["Topics"])  # Extract topics from dictionary
-                common_topics = requested_topics.intersection(pub_topics)
-
-                if common_topics:
-                    # Create a PublisherInfo entry
-                    pub_info = discovery_pb2.LookupPubByTopicResp.PublisherInfo()
-                    pub_info.id = pub_id
-                    pub_info.addr = pub_data["IP"]
-                    pub_info.port = pub_data["Port"]
-                    pub_info.topics.extend(pub_data["Topics"])
-
-                    matched_publishers.append(pub_info)
-
-
-            response = discovery_pb2.DiscoveryResp()
-            response.msg_type = discovery_pb2.TYPE_LOOKUP_PUB_BY_TOPIC
-            response.lookup_resp.status = True  
-            response.lookup_resp.publishers.extend(matched_publishers)
-
-            self.logger.info(f"DiscoveryMW::process_lookup_request - Found {len(matched_publishers)} matching publishers")
-
-            return response
-
-        except Exception as e:
-            raise e
-
-
-
-    
-    def create_register_response(self, success, reason=""):
+    def create_register_response(self, success):
         """ Create a registration response message """
         self.logger.info("DiscoveryMW::create_register_response - Creating response")
         response = discovery_pb2.DiscoveryResp()
         response.msg_type = discovery_pb2.TYPE_REGISTER
         response.register_resp.status = discovery_pb2.STATUS_SUCCESS if success else discovery_pb2.STATUS_FAILURE
-        response.register_resp.reason = reason
         return response
-    
+
     def create_error_response(self, error_message):
         """ Create an error response message """
         self.logger.error(f"DiscoveryMW::create_error_response - {error_message}")
         response = discovery_pb2.DiscoveryResp()
         response.msg_type = discovery_pb2.TYPE_UNKNOWN
         return response
-    
-    def disable_event_loop(self):
-        """ Stop the event loop """
-        self.handle_events = False
-        

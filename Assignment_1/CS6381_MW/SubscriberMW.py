@@ -142,9 +142,12 @@ class SubscriberMW:
             self.logger.debug ("SubscriberMW::register - populate the nested register req")
             register_req = discovery_pb2.RegisterReq()  # allocate
             register_req.role = discovery_pb2.ROLE_SUBSCRIBER  # we are a subscriber
+
+      
             # It was observed that we cannot directly assign the nested field here.
             # A way around is to use the CopyFrom method as shown
             register_req.info.CopyFrom(reg_info)    # copy contents of inner structure
+            register_req.topiclist[:] = self.topiclist
             #register_req.topiclist[:] = topiclist   # this is how repeated entries are added (or use append() or extend ()
             self.logger.debug ("SubscriberMW::register - done populating nested RegisterReq")
             # Finally, build the outer layer DiscoveryReq Message
@@ -179,6 +182,7 @@ class SubscriberMW:
             self.logger.debug ("SubscriberMW::lookup - building the Lookup Req message")
             lookup_req = discovery_pb2.LookupPubByTopicReq()  # allocate
             lookup_req.topiclist[:] = self.topiclist
+            print(f"Topiclist in Subscriber lookup {lookup_req.topiclist[:]}")
             self.logger.debug ("SubscriberMW::lookup - done building Lookup Req message")
             # Finally, build the outer layer DiscoveryReq Message
             self.logger.debug ("SubscriberMW::lookup - build the outer DiscoveryReq message")
