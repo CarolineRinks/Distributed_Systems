@@ -12,6 +12,7 @@ import sys
 import time
 import logging
 import zmq
+import time
 
 from CS6381_MW import discovery_pb2
 
@@ -181,8 +182,11 @@ class PublisherMW():
            In ViaBroker mode, the PUB socket is connected to the broker;
            in Direct mode, the PUB socket is bound and subscribers connect directly.'''
         try:
+            timestamp = time.time()
+        # Format the message as "topic:timestamp:data"
+            
             self.logger.debug("PublisherMW::disseminate")
-            send_str = topic + ":" + data
+            send_str = f"{topic}:{timestamp}:{data}"
             self.logger.debug("PublisherMW::disseminate - sending: {}".format(send_str))
             self.pub.send(bytes(send_str, "utf-8"))
             self.logger.debug("PublisherMW::disseminate complete")

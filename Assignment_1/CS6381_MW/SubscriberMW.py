@@ -119,9 +119,27 @@ class SubscriberMW:
         try:
             message = self.sub.recv_string()
             self.logger.info(f"SubscriberMW::handle_message - received: {message}")
+            parts = message.split(":", 2)
+            if len(parts) < 3:
+                self.logger.error("Invalid message format")
+                return 0
+            topic, sent_timestamp_str, payload = parts
+            sent_timestamp = float(sent_timestamp_str)
+            latency = time.time() - sent_timestamp
+            self.logger.info(f"Latency for topic '{topic}': {latency:.6f} seconds")
+            self.log_latency(topic, latency)
             return 0
         except Exception as e:
             raise e
+
+    def log_latency(self, topic, latency):
+        # Append a record to a CSV file.
+        try:
+            with open("latency_results.csv", "a") as f:
+                # Format: timestamp, topic, latency
+                f.write(f"{time.time()},{topic},{latency}\n")
+        except Exception as e:
+            self.logger.error("Error logging latency: " + str(e))
 
     def register(self, name):
         """Register with the Discovery service as a subscriber."""
