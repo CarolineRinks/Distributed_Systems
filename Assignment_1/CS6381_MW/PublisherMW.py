@@ -29,6 +29,7 @@ import sys    # for syspath and system exception
 import time   # for sleep
 import logging # for logging. Use it in place of print statements.
 import zmq  # ZMQ sockets
+import csv
 
 # import serialization logic
 from CS6381_MW import discovery_pb2
@@ -326,8 +327,10 @@ class PublisherMW ():
 
       # Now use the protobuf logic to encode the info and send it.  But for now
       # we are simply sending the string to make sure dissemination is working.
-      send_str = topic + ":" + data
-      self.logger.debug ("PublisherMW::disseminate - {}".format (send_str))
+      timestamp = time.time_ns()
+      send_str = f"{timestamp},{id},{topic},{data}"
+    
+      self.logger.debug("PublisherMW::disseminate - {}".format(send_str))
 
       # send the info as bytes. See how we are providing an encoding of utf-8
       self.pub.send (bytes(send_str, "utf-8"))
