@@ -2,6 +2,7 @@ import zmq
 import logging
 import configparser
 from CS6381_MW import discovery_pb2
+from .zkclient import ZK_Driver
 
 class DiscoveryMW:
     """Middleware for the Discovery Service."""
@@ -28,6 +29,8 @@ class DiscoveryMW:
         self.publishers = {}   # Format: { "pub1": {"addr": <IP>, "port": <PORT>, "topics": [t1, t2]} }
         self.subscribers = {}  # Format: { "sub1": {"topics": [t1, t2]} }
         self.broker = None     # Will hold broker information when registered
+
+        self.zkclient_obj = ZK_Driver()
 
     def configure(self, args):
         """Configure the Discovery Service using command-line arguments."""
@@ -98,12 +101,20 @@ class DiscoveryMW:
                 }
                 self.logger.info(f"Registered Publisher: {entity_id} with topics {topics}")
                 self.registered_pubs += 1
+
+                # Send message to Zookeeper to add new znode to the tree
+                create_znode("publisher", entity_id, topics, register_req.info.addr, register_req.info.port)
+
+
             elif role == discovery_pb2.ROLE_SUBSCRIBER:
                 self.subscribers[entity_id] = {
                     "topics": topics
                 }
                 self.logger.info(f"Registered Subscriber: {entity_id} with topics {topics}")
                 self.registered_subs += 1
+
+                # Send message to Zookeeper to add new znode to the tree
+                create_znode("subscriber", entity_id, topics, register_req.info.addr, register_req.info.port)
             else:
                 self.logger.error("DiscoveryMW::process_registration - Unknown role in registration")
                 return self.create_register_response(False)
@@ -124,6 +135,9 @@ class DiscoveryMW:
                 "back_port": register_broker_req.broker.back_port,
             }
             self.logger.info(f"Registered Broker: {self.broker}")
+            # Send message to Zookeeper to add new znode to the tree
+            #create_znode("broker", register_broker_req.broker.id, None, register_req.info.addr, register_req.info.port)
+
             return self.create_register_response(True)
         except Exception as e:
             self.logger.error(f"DiscoveryMW::process_register_broker - Exception: {e}")
