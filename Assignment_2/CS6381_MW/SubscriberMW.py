@@ -4,6 +4,8 @@ import sys
 import time
 import logging
 from CS6381_MW import discovery_pb2
+from .zkclient import ZK_Driver
+
 
 class SubscriberMW:
     def __init__(self, logger, topiclist):
@@ -18,6 +20,10 @@ class SubscriberMW:
         self.handle_events = True   # Event loop control
         self.lookup_strategy = None  # Renamed attribute (avoids conflict with lookup() method)
         self.dissemination = None
+
+        self.zk_obj = ZK_Driver()
+        self.zk_obj.init_driver() 
+        self.zk_obj.start_session()
 
     def configure(self, args, dissemination, lookup_strategy):
         """Initialize the SubscriberMW."""
@@ -41,6 +47,12 @@ class SubscriberMW:
             for topic in self.topiclist:
                 self.sub.setsockopt_string(zmq.SUBSCRIBE, topic)
             self.logger.info("SubscriberMW::configure completed")
+
+            # Send message to Zookeeper to add new znode to the tree
+            self.logger.info(f"Zookeeper: Creating znode for Subscriber {args.name} with addr {self.addr}, port {self.port}")
+            self.zk_obj.create_znode("subscriber", args.name, self.addr, self.port)
+            self.logger.info(f"Zookeeper: Created znode for Subscriber {args.name} !!")
+            
         except Exception as e:
             raise e
 

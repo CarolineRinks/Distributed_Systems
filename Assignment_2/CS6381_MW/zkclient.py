@@ -24,11 +24,6 @@ import argparse
 from kazoo.client import KazooClient   # client API
 from kazoo.client import KazooState    # for the state machine
 
-# to avoid any warning about no handlers for logging purposes, we
-# do the following
-import logging
-logging.basicConfig ()
-
 #--------------------------------------------------------------------------
 # define a callback function to let us know what state we are in currently
 # Kazoo is implemented in such a way that the system goes thru 3 states.
@@ -58,7 +53,7 @@ class ZK_Driver ():
     #################################################################
     # constructor
     #################################################################
-    def __init__ (self, args):
+    def __init__ (self):
         self.zk = None  # session handle to the zookeeper server
         self.zkIPAddr = "127.0.0.1"  # ZK server IP address
         self.zkPort = 2181  # ZK server port num
@@ -158,7 +153,7 @@ class ZK_Driver ():
     # -----------------------------------------------------------------------
     # create a znode
     #
-    def create_znode (self, role, name, topiclist, ip, port):
+    def create_znode (self, role, name, ip, port):
         """ ******************* znode creation ************************ """
         try:
             # here we create a node just like we did via the CLI. But here we are
@@ -169,23 +164,32 @@ class ZK_Driver ():
             #
             # Note that we do not check here if the node already exists. If it does,
             # then we will get an exception
-            print ("Creating an ephemeral znode {} with value {}".format(self.zkName,self.zkVal))
 
-            for topic in topiclist:
-                path = "" 
 
-                if role == "publisher":
-                    path = f"\\root\\topics\\{topic}\\pub\\{name}"
-                elif role == "subscriber":
-                    path = f"\\root\\topics\\{topic}\\sub\\{name}"
-                elif role == "broker":
-                    path = f"\\root\\broker\\{name}"
-                else:
-                    print("unknown role", sys.exc_info()[0])
-                    return
+            path = "" 
+            if role == "publisher":
+                path = f"/root/pubs/{name}"
+            elif role == "subscriber":
+                path = f"/root/subs/{name}"
+            elif role == "broker":
+                path = f"/root/broker/{name}"
+            else:
+                print("unknown role", sys.exc_info()[0])
+                return
 
-                self.zk.create(path, value=f"{ip}:{port}", ephemeral=True, makepath=True)
-                print(f"Created znode {path} with value {ip}:{port}")
+            value = f"{ip}:{port}"
+            value_bytes = value.encode('utf-8')
+            print(f"Creating znode '{path}' with value '{value}'")
+            self.zk.create(path, value=value_bytes, ephemeral=True, makepath=True)
+            print(f"Done creating znode")
+
+            # Test if the znode was created
+            if self.zk.exists(path):
+                print (f"{name} znode indeed exists")
+                # Now acquire the value and stats of that znode
+                #value,stat = self.zk.get(self.zkName, watch=self.watch)
+                val,stat = self.zk.get(path)
+                print(f"Details of znode {path}: value = {val}, stat = {stat}")
         except:
             print("Exception thrown in create (): ", sys.exc_info()[0])
             return
@@ -270,19 +274,19 @@ class ZK_Driver ():
             self.create_znode ()
 
             # next we demo retrieving a stored value at a znode. 
-            print ("\n")
-            input ("Obtain stored value -- Press any key to continue")
-            self.get_znode_value ()
+            # print ("\n")
+            # input ("Obtain stored value -- Press any key to continue")
+            # self.get_znode_value ()
 
-            # next we demo modifying the value stored at a znode
-            print ("\n")
-            input ("Modify stored value -- Press any key to continue")
-            self.modify_znode_value (b"bar2")
+            # # next we demo modifying the value stored at a znode
+            # print ("\n")
+            # input ("Modify stored value -- Press any key to continue")
+            # self.modify_znode_value (b"bar2")
 
-            # next we demo retrieving a stored value at a znode. 
-            print ("\n")
-            input ("Obtain the modified stored value -- Press any key to continue")
-            self.get_znode_value ()
+            # # next we demo retrieving a stored value at a znode. 
+            # print ("\n")
+            # input ("Obtain the modified stored value -- Press any key to continue")
+            # self.get_znode_value ()
 
             # now let us disconnect. Doing so should delete our znode because
             # it is ephemeral
@@ -341,11 +345,11 @@ def main ():
     """ Main program """
 
     print ("Demo program for ZooKeeper")
-    parsed_args = parseCmdLineArgs ()
+    # parsed_args = parseCmdLineArgs ()
     
     # 
     # invoke the driver program
-    driver = ZK_Driver (parsed_args)
+    driver = ZK_Driver ()
 
     # initialize the driver
     driver.init_driver ()

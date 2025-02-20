@@ -15,6 +15,8 @@ import zmq
 import time
 
 from CS6381_MW import discovery_pb2
+from .zkclient import ZK_Driver
+
 
 class PublisherMW():
     def __init__(self, logger):
@@ -27,6 +29,10 @@ class PublisherMW():
         self.upcall_obj = None              # Pointer to the application-level object
         self.handle_events = True           # Controls the event loop
         self.dissemination = None           # Dissemination strategy ("Direct" or "ViaBroker")
+
+        self.zk_obj = ZK_Driver()
+        self.zk_obj.init_driver() 
+        self.zk_obj.start_session()
 
     def configure(self, args, dissemination=None, lookup=None):
         '''Initialize the PublisherMW. In Direct mode the PUB socket is bound,
@@ -63,6 +69,12 @@ class PublisherMW():
                 self.logger.debug("PublisherMW::configure - Direct mode: bound PUB socket to " + bind_string)
 
             self.logger.info("PublisherMW::configure completed")
+
+            # Send message to Zookeeper to add new znode to the tree
+            self.logger.info(f"Zookeeper: Creating znode for Publisher {args.name} with, addr {self.addr}, port {self.port}")
+            self.zk_obj.create_znode("publisher", args.name, self.addr, self.port)
+            self.logger.info(f"Zookeeper: Created znode for Publisher {args.name}")
+
         except Exception as e:
             raise e
 
@@ -198,3 +210,5 @@ class PublisherMW():
 
     def disable_event_loop(self):
         self.handle_events = False
+
+

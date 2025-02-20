@@ -29,8 +29,23 @@ class DiscoveryMW:
         self.publishers = {}   # Format: { "pub1": {"addr": <IP>, "port": <PORT>, "topics": [t1, t2]} }
         self.subscribers = {}  # Format: { "sub1": {"topics": [t1, t2]} }
         self.broker = None     # Will hold broker information when registered
+        self.pub_children = [] # List of active publishers
 
         self.zkclient_obj = ZK_Driver()
+        self.zkclient_obj.init_driver()
+        self.zkclient_obj.start_session()
+
+        @self.zkclient_obj.zk.ChildrenWatch("/root/pubs")
+        def watch_publishers(children):
+            # 'children' is the current list of child znodes (i.e., active publishers).
+            # Compare it to your internal list to see which znode(s) disappeared or appeared.
+            self.handle_publisher_change(children)
+
+        @self.zkclient_obj.zk.ChildrenWatch("/root/subs")
+        def watch_subscribers(children):
+            # 'children' is the current list of child znodes (i.e., active subscribers).
+            # Compare it to your internal list to see which znode(s) disappeared or appeared.
+            self.handle_subscribers_change(children)
 
     def configure(self, args):
         """Configure the Discovery Service using command-line arguments."""
@@ -42,6 +57,34 @@ class DiscoveryMW:
         self.rep_socket.bind(bind_str)
         self.poller.register(self.rep_socket, zmq.POLLIN)
         self.logger.info(f"DiscoveryMW:: Listening on {bind_str}")
+
+        
+    def handle_publisher_change(self,current_children):
+        # Suppose you track known publishers in a dict: self.publishers = {pub_id: {...}, ...}
+        known_pub_ids = set(self.publishers.keys())
+        active_pub_ids = set(current_children)  # from the ephemeral znode names
+
+        # Find the difference
+        removed_pub_ids = known_pub_ids - active_pub_ids
+        for pub_id in removed_pub_ids:
+            self.logger.info(f"Publisher {pub_id} is no longer active. Removing from internal state.")
+            del self.publishers[pub_id]
+            # Optionally notify subscribers or update any relevant state
+    
+    
+    def handle_subscribers_change(self,current_children):
+        # Suppose you track known publishers in a dict: self.publishers = {pub_id: {...}, ...}
+        known_sub_ids = set(self.subscribers.keys())
+        active_sub_ids = set(current_children)  # from the ephemeral znode names
+
+
+        # Find the difference
+        removed_sub_ids = known_sub_ids - active_sub_ids
+        for sub_id in removed_sub_ids:
+            self.logger.info(f"Subscriber {sub_id} is no longer active. Removing from internal state.")
+            del self.subscribers[sub_id]
+            # Optionally notify subscribers or update any relevant state
+    
 
     def event_loop(self):
         """Event loop: waits for and processes incoming requests."""
@@ -101,20 +144,14 @@ class DiscoveryMW:
                 }
                 self.logger.info(f"Registered Publisher: {entity_id} with topics {topics}")
                 self.registered_pubs += 1
+                self.update_subscribers(entity_id, topics)
 
-                # Send message to Zookeeper to add new znode to the tree
-                create_znode("publisher", entity_id, topics, register_req.info.addr, register_req.info.port)
-
-
-            elif role == discovery_pb2.ROLE_SUBSCRIBER:
+            elif role == discovery_pb2.ROLE_SUBSCRIBER: 
                 self.subscribers[entity_id] = {
                     "topics": topics
                 }
                 self.logger.info(f"Registered Subscriber: {entity_id} with topics {topics}")
                 self.registered_subs += 1
-
-                # Send message to Zookeeper to add new znode to the tree
-                create_znode("subscriber", entity_id, topics, register_req.info.addr, register_req.info.port)
             else:
                 self.logger.error("DiscoveryMW::process_registration - Unknown role in registration")
                 return self.create_register_response(False)
@@ -135,8 +172,6 @@ class DiscoveryMW:
                 "back_port": register_broker_req.broker.back_port,
             }
             self.logger.info(f"Registered Broker: {self.broker}")
-            # Send message to Zookeeper to add new znode to the tree
-            #create_znode("broker", register_broker_req.broker.id, None, register_req.info.addr, register_req.info.port)
 
             return self.create_register_response(True)
         except Exception as e:
@@ -165,6 +200,32 @@ class DiscoveryMW:
         except Exception as e:
             self.logger.error(f"DiscoveryMW::process_lookup_request - Exception: {e}")
             raise e
+    
+    # def update_subscribers(self,entity_id,topics):
+    #     """Return a list of publishers that publish at least one requested topic.
+    #     If the topic list is empty, return all publishers."""
+    #     try:
+    #         self.logger.info("DiscoveryMW:: updating Subscribers - Finding matching publishers")
+    #         response = discovery_pb2.DiscoveryResp()
+    #         response.msg_type = discovery_pb2.TYPE_LOOKUP_PUB_BY_TOPIC
+    #         # Create a LookupPubByTopicResp message and explicitly set status to True.
+    #         lookup_resp = discovery_pb2.LookupPubByTopicResp()
+    #         lookup_resp.status = True
+
+    #         for sub_id, sub_data in self.subscribers.items():
+    #             sub_addr = 
+    #             if any(topic in topics for topic in sub_data["topics"]):
+    #                 pub_info = lookup_resp.publishers.add()
+    #                 pub_info.id = entity_id
+    #                 pub_info.addr = self.publishers[entity_id]["addr"]
+    #                 pub_info.port = self.publishers[entity_id]["port"]
+    #                 pub_info.topics.extend(topics)
+    #         response.lookup_resp.CopyFrom(lookup_resp)
+    #         return response
+
+    #     except Exception as e:
+    #         self.logger.error(f"DiscoveryMW:: Update Subscribers - Exception: {e}")
+    #         raise e
 
 
     def process_lookup_broker(self):
