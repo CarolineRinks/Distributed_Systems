@@ -3,6 +3,7 @@ import logging
 import configparser
 import time
 from CS6381_MW import discovery_pb2
+from .zkclient import ZK_Driver
 
 class BrokerMW:
     """Middleware for the broker (ViaBroker mode). This implementation forwards every
@@ -15,6 +16,25 @@ class BrokerMW:
         self.context = zmq.Context()
         self.poller = zmq.Poller()
         self.discovery_req = None
+        self.zk_obj = ZK_Driver()
+        self.zk_obj.init_driver() 
+        self.zk_obj.start_session()
+
+        # @self.zk_obj.zk.ChildrenWatch("/root/pubs")
+        # def watch_publishers(children):
+        #     self.logger.info("Zookeeper Watch: Detected change in /root/pubs")
+        #     if self.discovery_req is not None:  # Ensure self.req is initialized before calling lookup
+        #         self.event_loop()
+        #     else:
+        #         self.logger.warning("Skipping lookup: self.discovery_req is not initialized yet.")
+
+        # @self.zk_obj.zk.ChildrenWatch("/root/subs")
+        # def watch_subscribers(children):
+        #     self.logger.info("Zookeeper Watch: Detected change in /root/subs")
+        #     if self.discovery_req is not None:  # Ensure self.req is initialized before calling lookup
+        #         self.event_loop()
+        #     else:
+        #         self.logger.warning("Skipping lookup: self.discovery_req is not initialized yet.")
 
     def configure(self, config):
         """Configure the broker using parameters from the config file."""
@@ -66,22 +86,22 @@ class BrokerMW:
         reply = self.discovery_req.recv()
         self.logger.info("BrokerMW::register_broker - Received registration reply.")
 
-    def wait_for_discovery_ready(self):
-        """Wait until the Discovery Service confirms readiness."""
-        self.logger.info("BrokerMW::wait_for_discovery_ready - Checking Discovery status")
-        while True:
-            req_msg = discovery_pb2.DiscoveryReq()
-            req_msg.msg_type = discovery_pb2.TYPE_ISREADY
-            self.discovery_req.send(req_msg.SerializeToString())
-            resp_bytes = self.discovery_req.recv()
-            resp_msg = discovery_pb2.DiscoveryResp()
-            resp_msg.ParseFromString(resp_bytes)
-            if resp_msg.isready_resp.status:
-                self.logger.info("BrokerMW::wait_for_discovery_ready - Discovery is READY")
-                break
-            else:
-                self.logger.info("BrokerMW::wait_for_discovery_ready - Not ready, retrying...")
-                time.sleep(1)
+    # def wait_for_discovery_ready(self):
+    #     """Wait until the Discovery Service confirms readiness."""
+    #     self.logger.info("BrokerMW::wait_for_discovery_ready - Checking Discovery status")
+    #     while True:
+    #         req_msg = discovery_pb2.DiscoveryReq()
+    #         req_msg.msg_type = discovery_pb2.TYPE_ISREADY
+    #         self.discovery_req.send(req_msg.SerializeToString())
+    #         resp_bytes = self.discovery_req.recv()
+    #         resp_msg = discovery_pb2.DiscoveryResp()
+    #         resp_msg.ParseFromString(resp_bytes)
+    #         if resp_msg.isready_resp.status:
+    #             self.logger.info("BrokerMW::wait_for_discovery_ready - Discovery is READY")
+    #             break
+    #         else:
+    #             self.logger.info("BrokerMW::wait_for_discovery_ready - Not ready, retrying...")
+    #             time.sleep(1)
 
     def fetch_publishers(self):
         """Fetch publisher information from Discovery (optional for filtering)."""
@@ -101,7 +121,8 @@ class BrokerMW:
     def event_loop(self):
         """Main event loop to forward publisher messages to subscribers."""
         self.logger.info("BrokerMW::event_loop - Waiting for Discovery to be ready")
-        self.wait_for_discovery_ready()
+        
+        # self.wait_for_discovery_ready()
         self.logger.info("BrokerMW::event_loop - Fetching registered publishers")
         self.fetch_publishers()
         self.logger.info("BrokerMW::event_loop - Running broker loop")

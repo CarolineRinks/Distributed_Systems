@@ -8,22 +8,34 @@ from .zkclient import ZK_Driver
 
 
 class SubscriberMW:
-    def __init__(self, logger, topiclist):
+    def __init__(self, logger, topiclist,dissemination):
         self.logger = logger
         self.req = None       # REQ socket for Discovery service
         self.sub = None       # SUB socket for receiving messages (from publishers or broker)
         self.poller = None    # ZMQ poller for events
+        self.name = None      # Subscriber name
         self.addr = None      # Local address
         self.port = None      # Subscriber’s port
         self.topiclist = topiclist  # Topics of interest
         self.upcall_obj = None      # Upcall handle to application
         self.handle_events = True   # Event loop control
         self.lookup_strategy = None  # Renamed attribute (avoids conflict with lookup() method)
-        self.dissemination = None
+        self.dissemination = dissemination
+        self.lookup_pending = False
 
         self.zk_obj = ZK_Driver()
         self.zk_obj.init_driver() 
         self.zk_obj.start_session()
+
+        if self.dissemination == "Direct":
+            @self.zk_obj.zk.ChildrenWatch("/root/pubs")
+            def watch_publishers(children):
+                self.logger.info("Zookeeper Watch: Detected change in /root/pubs")
+                if self.req is not None:  # Ensure self.req is initialized before calling lookup
+                    self.lookup(self.name)
+                else:
+                    self.logger.warning("Skipping lookup: self.req is not initialized yet.")
+
 
     def configure(self, args, dissemination, lookup_strategy):
         """Initialize the SubscriberMW."""
@@ -33,15 +45,16 @@ class SubscriberMW:
             self.logger.info("SubscriberMW::configure")
             self.addr = args.addr
             self.port = args.port
-            self.logger.debug("SubscriberMW::configure - obtaining ZMQ context")
+            self.name = args.name
+            self.logger.info("SubscriberMW::configure - obtaining ZMQ context")
             context = zmq.Context()
             self.poller = zmq.Poller()
-            self.logger.debug("SubscriberMW::configure - creating REQ and SUB sockets")
+            self.logger.info("SubscriberMW::configure - creating REQ and SUB sockets")
             self.req = context.socket(zmq.REQ)
             self.sub = context.socket(zmq.SUB)
             self.poller.register(self.req, zmq.POLLIN)
             self.poller.register(self.sub, zmq.POLLIN)
-            self.logger.debug("SubscriberMW::configure - connecting to Discovery service")
+            self.logger.info("SubscriberMW::configure - connecting to Discovery service")
             connect_str = f"tcp://{args.discovery}"
             self.req.connect(connect_str)
             for topic in self.topiclist:
@@ -100,19 +113,18 @@ class SubscriberMW:
             bytesRcvd = self.req.recv()
             disc_resp = discovery_pb2.DiscoveryResp()
             disc_resp.ParseFromString(bytesRcvd)
+            # Reset the lookup flag since we received a reply
+            self.lookup_pending = False
+            
             if disc_resp.msg_type == discovery_pb2.TYPE_REGISTER:
                 self.logger.info("SubscriberMW::handle_reply - Registration response received.")
                 timeout = self.upcall_obj.register_response(disc_resp.register_resp)
-            elif disc_resp.msg_type == discovery_pb2.TYPE_ISREADY:
-                self.logger.info("SubscriberMW::handle_reply - Ready response received.")
-                timeout = self.upcall_obj.isready_response(disc_resp.isready_resp)
             elif disc_resp.msg_type == discovery_pb2.TYPE_LOOKUP_PUB_BY_TOPIC:
                 self.logger.info("SubscriberMW::handle_reply - Publisher lookup response received.")
                 timeout = self.upcall_obj.lookup_response(disc_resp.lookup_resp)
             elif disc_resp.msg_type == discovery_pb2.TYPE_LOOKUP_BROKER:
                 self.logger.info("SubscriberMW::handle_reply - Broker lookup response received.")
                 broker_info = disc_resp.lookup_resp_broker.broker
-                # Connect using the back-end port provided by the broker.
                 connect_str = f"tcp://{broker_info.addr}:{broker_info.back_port}"
                 self.logger.info(f"SubscriberMW::handle_reply - Connecting to broker at {connect_str}")
                 self.sub.connect(connect_str)
@@ -125,6 +137,7 @@ class SubscriberMW:
             return timeout
         except Exception as e:
             raise e
+
 
     def handle_message(self):
         """Handle an incoming message from a publisher or broker."""
@@ -169,7 +182,7 @@ class SubscriberMW:
             disc_req.msg_type = discovery_pb2.TYPE_REGISTER
             disc_req.register_req.CopyFrom(register_req)
             buf2send = disc_req.SerializeToString()
-            self.logger.debug(f"SubscriberMW::register - sending: {buf2send}")
+            self.logger.info(f"SubscriberMW::register - sending: {buf2send}")
             self.req.send(buf2send)
             self.logger.info("SubscriberMW::register - registration message sent; awaiting reply")
         except Exception as e:
@@ -178,10 +191,14 @@ class SubscriberMW:
     def lookup(self, name):
         """Perform a lookup (for publisher info in Direct mode or broker info in ViaBroker)."""
         try:
+            if self.lookup_pending:
+                self.logger.info("SubscriberMW::lookup - lookup already pending; not sending a new request")
+                return
+            self.lookup_pending = True  # Mark that a lookup is in progress
             self.logger.info("SubscriberMW::lookup")
             lookup_req = discovery_pb2.LookupPubByTopicReq()
             lookup_req.topiclist[:] = self.topiclist
-            self.logger.debug("SubscriberMW::lookup - building outer DiscoveryReq message")
+            self.logger.info("SubscriberMW::lookup - building outer DiscoveryReq message")
             disc_req = discovery_pb2.DiscoveryReq()
             if self.dissemination == "ViaBroker":
                 disc_req.msg_type = discovery_pb2.TYPE_LOOKUP_BROKER
@@ -189,7 +206,7 @@ class SubscriberMW:
                 disc_req.msg_type = discovery_pb2.TYPE_LOOKUP_PUB_BY_TOPIC
             disc_req.lookup_req.CopyFrom(lookup_req)
             buf2send = disc_req.SerializeToString()
-            self.logger.debug(f"SubscriberMW::lookup - sending lookup: {buf2send}")
+            self.logger.info(f"SubscriberMW::lookup - sending lookup: {buf2send}")
             self.req.send(buf2send)
             self.logger.info("SubscriberMW::lookup - lookup message sent; awaiting reply")
         except Exception as e:

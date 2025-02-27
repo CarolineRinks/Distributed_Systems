@@ -34,8 +34,8 @@ def parseCmdLineArgs():
     parser = argparse.ArgumentParser(description="Discovery Service")
     parser.add_argument("-a", "--addr", default="localhost", help="IP address to advertise for Discovery (default: localhost)")
     parser.add_argument("-p", "--port", default=5555, type=int, help="Port for the Discovery Service")
-    parser.add_argument("--num_pubs", type=int, required=True, help="Expected number of publishers")
-    parser.add_argument("--num_subs", type=int, required=True, help="Expected number of subscribers")
+    # parser.add_argument("--num_pubs", type=int, required=True, help="Expected number of publishers")
+    # parser.add_argument("--num_subs", type=int, required=True, help="Expected number of subscribers")
     return parser.parse_args()
 
 def main():

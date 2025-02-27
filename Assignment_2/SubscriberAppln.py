@@ -32,14 +32,14 @@ class SubscriberAppln():
             self.logger.info("SubscriberAppln::configure")
             self.state = self.State.CONFIGURE
             self.name = args.name
-            self.logger.debug("SubscriberAppln::configure - parsing config.ini")
+            self.logger.info("SubscriberAppln::configure - parsing config.ini")
             config = configparser.ConfigParser()
             config.read('config.ini')
             self.lookup_strategy = config["Discovery"]["Strategy"]
             self.dissemination = config["Dissemination"]["Strategy"]
             self.topiclist.append(args.topic)
-            self.logger.debug("SubscriberAppln::configure - initializing middleware object")
-            self.mw_obj = SubscriberMW(self.logger, self.topiclist)
+            self.logger.info("SubscriberAppln::configure - initializing middleware object")
+            self.mw_obj = SubscriberMW(self.logger, self.topiclist, self.dissemination)
             self.mw_obj.configure(args, self.dissemination, self.lookup_strategy)
             self.logger.info("SubscriberAppln::configure - configuration complete")
         except Exception as e:
@@ -49,7 +49,7 @@ class SubscriberAppln():
         try:
             self.logger.info("SubscriberAppln::driver")
             self.dump()
-            self.logger.debug("SubscriberAppln::driver - setting up upcall handle")
+            self.logger.info("SubscriberAppln::driver - setting up upcall handle")
             self.mw_obj.set_upcall_handle(self)
             self.state = self.State.REGISTER
             self.mw_obj.event_loop(timeout=0)
@@ -61,16 +61,13 @@ class SubscriberAppln():
         try:
             self.logger.info("SubscriberAppln::invoke_operation")
             if self.state == self.State.REGISTER:
-                self.logger.debug("SubscriberAppln::invoke_operation - registering with Discovery")
+                self.logger.info("SubscriberAppln::invoke_operation - registering with Discovery")
                 self.mw_obj.register(self.name)
                 return None
-            elif self.state == self.State.ISREADY:
-                self.logger.debug("SubscriberAppln::invoke_operation - performing lookup")
-                self.mw_obj.lookup(self.name)
-                return None
             elif self.state == self.State.RECEIVING:
-                self.logger.debug("SubscriberAppln::invoke_operation - in RECEIVING state; waiting for publications")
-                return 5000  # wait 5 seconds before next upcall
+                self.logger.info("SubscriberAppln::invoke_operation - in RECEIVING state; waiting for publications")
+                time.sleep(1)
+                return None
             elif self.state == self.State.COMPLETED:
                 self.mw_obj.disable_event_loop()
                 return None
@@ -78,16 +75,18 @@ class SubscriberAppln():
                 raise ValueError("Undefined state of the appln object")
         except Exception as e:
             raise e
+
         
     def register_response(self, reg_resp):
         try:
             self.logger.info("SubscriberAppln::register_response")
             if reg_resp.status == discovery_pb2.STATUS_SUCCESS:
-                self.logger.debug("SubscriberAppln::register_response - registration successful")
-                self.state = self.State.ISREADY
+                self.logger.info("SubscriberAppln::register_response - registration successful")
+                self.mw_obj.lookup(self.name)
+                self.state = self.State.RECEIVING
                 return 0
             else:
-                self.logger.debug(f"SubscriberAppln::register_response - registration failure: {reg_resp.reason}")
+                self.logger.info(f"SubscriberAppln::register_response - registration failure: {reg_resp.reason}")
                 raise ValueError("Subscriber needs a unique id")
         except Exception as e:
             raise e
@@ -96,40 +95,40 @@ class SubscriberAppln():
         try:
             self.logger.info("SubscriberAppln::lookup_response")
             if lookup_resp.status:
-                self.logger.debug("SubscriberAppln::lookup_response - lookup successful")
+                self.logger.info("SubscriberAppln::lookup_response - lookup successful")
                 if self.dissemination == "Direct":
                     # In Direct mode, configure the SUB socket to connect to each publisher.
-                    self.logger.debug("SubscriberAppln::lookup_response - configuring sources for Direct mode")
+                    self.logger.info("SubscriberAppln::lookup_response - configuring sources for Direct mode")
                     self.mw_obj.configure_sources(lookup_resp.publishers)
                     self.state = self.State.RECEIVING
                 else:
                     # In ViaBroker mode, the middleware already connects to the broker.
                     self.state = self.State.RECEIVING
             else:
-                self.logger.debug(f"SubscriberAppln::lookup_response - lookup failure: {lookup_resp.reason}")
+                self.logger.info(f"SubscriberAppln::lookup_response - lookup failure: {lookup_resp.reason}")
                 raise ValueError("Could not lookup publisher info")
             return 0
         except Exception as e:
             raise e
 
-    def isready_response(self, isready_resp):
-        try:
-            self.logger.info("SubscriberAppln::isready_response")
-            if not isready_resp.status:
-                self.logger.debug("SubscriberAppln::isready_response - not ready; retrying")
-                time.sleep(10)
-            else:
-                self.state = self.State.ISREADY
-            return 0
-        except Exception as e:
-            raise e
+    # def isready_response(self, isready_resp):
+    #     try:
+    #         self.logger.info("SubscriberAppln::isready_response")
+    #         if not isready_resp.status:
+    #             self.logger.info("SubscriberAppln::isready_response - not ready; retrying")
+    #             time.sleep(10)
+    #         else:
+    #             self.state = self.State.ISREADY
+    #         return 0
+    #     except Exception as e:
+    #         raise e
 
     def broker_lookup_response(self, broker_info):
         """Upcall invoked when broker lookup is complete. Disable further lookups."""
         try:
             self.logger.info("SubscriberAppln::broker_lookup_response - broker lookup complete")
             self.state = self.State.RECEIVING
-            self.mw_obj.disable_lookup()
+            # self.mw_obj.disable_lookup()
             return 0
         except Exception as e:
             raise e
@@ -160,16 +159,16 @@ def parseCmdLineArgs():
 def main():
     try:
         logger = logging.getLogger("SubscriberAppln")
-        logger.debug("Main: parse command line arguments")
+        logger.info("Main: parse command line arguments")
         args = parseCmdLineArgs()
-        logger.debug(f"Main: resetting log level to {args.loglevel}")
+        logger.info(f"Main: resetting log level to {args.loglevel}")
         logger.setLevel(args.loglevel)
-        logger.debug(f"Main: effective log level is {logger.getEffectiveLevel()}")
-        logger.debug("Main: obtaining SubscriberAppln object")
+        logger.info(f"Main: effective log level is {logger.getEffectiveLevel()}")
+        logger.info("Main: obtaining SubscriberAppln object")
         app = SubscriberAppln(logger)
-        logger.debug("Main: configuring SubscriberAppln object")
+        logger.info("Main: configuring SubscriberAppln object")
         app.configure(args)
-        logger.debug("Main: invoking SubscriberAppln driver")
+        logger.info("Main: invoking SubscriberAppln driver")
         app.driver()
     except Exception as e:
         logger.error(f"Exception caught in main - {e}")

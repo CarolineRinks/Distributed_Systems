@@ -3,6 +3,8 @@ import logging
 import configparser
 from CS6381_MW import discovery_pb2
 from .zkclient import ZK_Driver
+from .zk_discovery_client import SequentialLeaderElection
+
 
 class DiscoveryMW:
     """Middleware for the Discovery Service."""
@@ -35,6 +37,9 @@ class DiscoveryMW:
         self.zkclient_obj.init_driver()
         self.zkclient_obj.start_session()
 
+        # zk discovery client object
+        self.zk_discovery_obj = SequentialLeaderElection(self.zkclient_obj.zk, self.discovery_ip, self.discovery_port)
+
         @self.zkclient_obj.zk.ChildrenWatch("/root/pubs")
         def watch_publishers(children):
             # 'children' is the current list of child znodes (i.e., active publishers).
@@ -49,14 +54,17 @@ class DiscoveryMW:
 
     def configure(self, args):
         """Configure the Discovery Service using command-line arguments."""
-        self.expected_pubs = args.num_pubs
-        self.expected_subs = args.num_subs
+        # self.expected_pubs = args.num_pubs
+        # self.expected_subs = args.num_subs
         self.logger.info("DiscoveryMW::configure - Setting up Discovery Service")
         # Bind REP socket so that the service listens on the configured IP and port.
         bind_str = f"tcp://{self.discovery_ip}:{self.discovery_port}"
         self.rep_socket.bind(bind_str)
         self.poller.register(self.rep_socket, zmq.POLLIN)
         self.logger.info(f"DiscoveryMW:: Listening on {bind_str}")
+
+        # After configuring, create the znode for this Discovery replica
+        self.zk_discovery_obj.start()
 
         
     def handle_publisher_change(self,current_children):
@@ -144,7 +152,7 @@ class DiscoveryMW:
                 }
                 self.logger.info(f"Registered Publisher: {entity_id} with topics {topics}")
                 self.registered_pubs += 1
-                self.update_subscribers(entity_id, topics)
+
 
             elif role == discovery_pb2.ROLE_SUBSCRIBER: 
                 self.subscribers[entity_id] = {
@@ -251,22 +259,22 @@ class DiscoveryMW:
             self.logger.error(f"DiscoveryMW::process_lookup_broker - Exception: {e}")
             raise e
 
-    def process_is_ready(self):
-        """Check if the expected number of publishers and subscribers are registered."""
-        try:
-            self.logger.info("DiscoveryMW::process_is_ready - Checking if system is ready")
-            ready = (self.registered_pubs >= self.expected_pubs) and (self.registered_subs >= self.expected_subs)
-            if ready:
-                self.logger.info("DiscoveryMW::process_is_ready - System is READY")
-            else:
-                self.logger.info(f"DiscoveryMW::process_is_ready - Not ready yet (Registered: {self.registered_pubs}/{self.expected_pubs} pubs, {self.registered_subs}/{self.expected_subs} subs)")
-            response = discovery_pb2.DiscoveryResp()
-            response.msg_type = discovery_pb2.TYPE_ISREADY
-            response.isready_resp.status = ready
-            return response
-        except Exception as e:
-            self.logger.error(f"DiscoveryMW::process_is_ready - Exception: {e}")
-            raise e
+    # def process_is_ready(self):
+    #     """Check if the expected number of publishers and subscribers are registered."""
+    #     try:
+    #         self.logger.info("DiscoveryMW::process_is_ready - Checking if system is ready")
+    #         ready = (self.registered_pubs >= self.expected_pubs) and (self.registered_subs >= self.expected_subs)
+    #         if ready:
+    #             self.logger.info("DiscoveryMW::process_is_ready - System is READY")
+    #         else:
+    #             self.logger.info(f"DiscoveryMW::process_is_ready - Not ready yet (Registered: {self.registered_pubs}/{self.expected_pubs} pubs, {self.registered_subs}/{self.expected_subs} subs)")
+    #         response = discovery_pb2.DiscoveryResp()
+    #         response.msg_type = discovery_pb2.TYPE_ISREADY
+    #         response.isready_resp.status = ready
+    #         return response
+    #     except Exception as e:
+    #         self.logger.error(f"DiscoveryMW::process_is_ready - Exception: {e}")
+    #         raise e
 
     def create_register_response(self, success):
         """Create a registration response message."""

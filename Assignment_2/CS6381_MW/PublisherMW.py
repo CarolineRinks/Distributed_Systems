@@ -44,29 +44,29 @@ class PublisherMW():
             self.dissemination = dissemination
 
             # Get the ZMQ context and poller
-            self.logger.debug("PublisherMW::configure - obtaining ZMQ context")
+            self.logger.info("PublisherMW::configure - obtaining ZMQ context")
             context = zmq.Context()
             self.poller = zmq.Poller()
 
             # Create the REQ and PUB sockets
-            self.logger.debug("PublisherMW::configure - creating REQ and PUB sockets")
+            self.logger.info("PublisherMW::configure - creating REQ and PUB sockets")
             self.req = context.socket(zmq.REQ)
             self.pub = context.socket(zmq.PUB)
             self.poller.register(self.req, zmq.POLLIN)
 
             # Connect to the Discovery service using the given address/port.
-            self.logger.debug("PublisherMW::configure - connecting to Discovery service")
+            self.logger.info("PublisherMW::configure - connecting to Discovery service")
             connect_str = "tcp://" + args.discovery
             self.req.connect(connect_str)
 
             # In Direct mode, bind the PUB socket so that subscribers can connect.
             # In ViaBroker mode, we will later connect the PUB socket to the broker.
             if self.dissemination == "ViaBroker":
-                self.logger.debug("PublisherMW::configure - ViaBroker mode: publisher will connect to broker for dissemination.")
+                self.logger.info("PublisherMW::configure - ViaBroker mode: publisher will connect to broker for dissemination.")
             else:
                 bind_string = "tcp://*:" + str(self.port)
                 self.pub.bind(bind_string)
-                self.logger.debug("PublisherMW::configure - Direct mode: bound PUB socket to " + bind_string)
+                self.logger.info("PublisherMW::configure - Direct mode: bound PUB socket to " + bind_string)
 
             self.logger.info("PublisherMW::configure completed")
 
@@ -103,9 +103,9 @@ class PublisherMW():
             if disc_resp.msg_type == discovery_pb2.TYPE_REGISTER:
                 # Registration reply
                 timeout = self.upcall_obj.register_response(disc_resp.register_resp)
-            elif disc_resp.msg_type == discovery_pb2.TYPE_ISREADY:
-                # IsReady reply
-                timeout = self.upcall_obj.isready_response(disc_resp.isready_resp)
+            # elif disc_resp.msg_type == discovery_pb2.TYPE_ISREADY:
+            #     # IsReady reply
+            #     timeout = self.upcall_obj.isready_response(disc_resp.isready_resp)
             elif disc_resp.msg_type == discovery_pb2.TYPE_LOOKUP_BROKER:
                 self.logger.info("PublisherMW::handle_reply - Broker lookup response received.")
                 # Extract broker information and connect our PUB socket to the broker’s frontend
@@ -128,54 +128,54 @@ class PublisherMW():
         '''Register the publisher with the Discovery service.'''
         try:
             self.logger.info("PublisherMW::register")
-            self.logger.debug("PublisherMW::register - populate the Registrant Info")
+            self.logger.info("PublisherMW::register - populate the Registrant Info")
             reg_info = discovery_pb2.RegistrantInfo()
             reg_info.id = name
             reg_info.addr = self.addr
             reg_info.port = self.port
-            self.logger.debug("PublisherMW::register - done populating Registrant Info")
+            self.logger.info("PublisherMW::register - done populating Registrant Info")
 
-            self.logger.debug("PublisherMW::register - populate the nested RegisterReq")
+            self.logger.info("PublisherMW::register - populate the nested RegisterReq")
             register_req = discovery_pb2.RegisterReq()
             register_req.role = discovery_pb2.ROLE_PUBLISHER
             register_req.info.CopyFrom(reg_info)
             register_req.topiclist[:] = topiclist
-            self.logger.debug("PublisherMW::register - done populating nested RegisterReq")
+            self.logger.info("PublisherMW::register - done populating nested RegisterReq")
 
-            self.logger.debug("PublisherMW::register - build the outer DiscoveryReq message")
+            self.logger.info("PublisherMW::register - build the outer DiscoveryReq message")
             disc_req = discovery_pb2.DiscoveryReq()
             disc_req.msg_type = discovery_pb2.TYPE_REGISTER
             disc_req.register_req.CopyFrom(register_req)
             buf2send = disc_req.SerializeToString()
-            self.logger.debug("PublisherMW::register - serialized buf: {}".format(buf2send))
+            self.logger.info("PublisherMW::register - serialized buf: {}".format(buf2send))
 
-            self.logger.debug("PublisherMW::register - sending buffer to Discovery service")
+            self.logger.info("PublisherMW::register - sending buffer to Discovery service")
             self.req.send(buf2send)
             self.logger.info("PublisherMW::register - sent register message; waiting for reply")
         except Exception as e:
             raise e
 
-    def is_ready(self):
-        '''Send an is_ready request to the Discovery service.'''
-        try:
-            self.logger.info("PublisherMW::is_ready")
-            self.logger.debug("PublisherMW::is_ready - populate the nested IsReady msg")
-            isready_req = discovery_pb2.IsReadyReq()
-            self.logger.debug("PublisherMW::is_ready - done populating nested IsReady msg")
+    # def is_ready(self):
+    #     '''Send an is_ready request to the Discovery service.'''
+    #     try:
+    #         self.logger.info("PublisherMW::is_ready")
+    #         self.logger.info("PublisherMW::is_ready - populate the nested IsReady msg")
+    #         isready_req = discovery_pb2.IsReadyReq()
+    #         self.logger.info("PublisherMW::is_ready - done populating nested IsReady msg")
 
-            self.logger.debug("PublisherMW::is_ready - build the outer DiscoveryReq message")
-            disc_req = discovery_pb2.DiscoveryReq()
-            disc_req.msg_type = discovery_pb2.TYPE_ISREADY
-            disc_req.isready_req.CopyFrom(isready_req)
-            self.logger.debug("PublisherMW::is_ready - done building the outer message")
-            buf2send = disc_req.SerializeToString()
-            self.logger.debug("PublisherMW::is_ready - serialized buf: {}".format(buf2send))
+    #         self.logger.info("PublisherMW::is_ready - build the outer DiscoveryReq message")
+    #         disc_req = discovery_pb2.DiscoveryReq()
+    #         disc_req.msg_type = discovery_pb2.TYPE_ISREADY
+    #         disc_req.isready_req.CopyFrom(isready_req)
+    #         self.logger.info("PublisherMW::is_ready - done building the outer message")
+    #         buf2send = disc_req.SerializeToString()
+    #         self.logger.info("PublisherMW::is_ready - serialized buf: {}".format(buf2send))
 
-            self.logger.debug("PublisherMW::is_ready - sending buffer to Discovery service")
-            self.req.send(buf2send)
-            self.logger.info("PublisherMW::is_ready - request sent; awaiting reply")
-        except Exception as e:
-            raise e
+    #         self.logger.info("PublisherMW::is_ready - sending buffer to Discovery service")
+    #         self.req.send(buf2send)
+    #         self.logger.info("PublisherMW::is_ready - request sent; awaiting reply")
+    #     except Exception as e:
+    #         raise e
 
     def lookup_broker(self):
         '''Send a lookup request to get broker information.'''
@@ -184,7 +184,7 @@ class PublisherMW():
             req_msg = discovery_pb2.DiscoveryReq()
             req_msg.msg_type = discovery_pb2.TYPE_LOOKUP_BROKER
             buf2send = req_msg.SerializeToString()
-            self.logger.debug("PublisherMW::lookup_broker - sending lookup broker request: {}".format(buf2send))
+            self.logger.info("PublisherMW::lookup_broker - sending lookup broker request: {}".format(buf2send))
             self.req.send(buf2send)
         except Exception as e:
             raise e
@@ -197,11 +197,11 @@ class PublisherMW():
             timestamp = time.time()
         # Format the message as "topic:timestamp:data"
             
-            self.logger.debug("PublisherMW::disseminate")
+            self.logger.info("PublisherMW::disseminate")
             send_str = f"{topic}:{timestamp}:{data}"
-            self.logger.debug("PublisherMW::disseminate - sending: {}".format(send_str))
+            self.logger.info("PublisherMW::disseminate - sending: {}".format(send_str))
             self.pub.send(bytes(send_str, "utf-8"))
-            self.logger.debug("PublisherMW::disseminate complete")
+            self.logger.info("PublisherMW::disseminate complete")
         except Exception as e:
             raise e
 

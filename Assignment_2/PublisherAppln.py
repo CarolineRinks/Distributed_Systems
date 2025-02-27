@@ -15,6 +15,7 @@ import configparser
 import logging
 from CS6381_MW import discovery_pb2
 from CS6381_MW.PublisherMW import PublisherMW
+from google.protobuf import text_format
 from topic_selector import TopicSelector
 from enum import Enum
 
@@ -52,19 +53,19 @@ class PublisherAppln():
             self.num_topics = args.num_topics
 
             # Read configuration from config.ini
-            self.logger.debug("PublisherAppln::configure - parsing config.ini")
+            self.logger.info("PublisherAppln::configure - parsing config.ini")
             config = configparser.ConfigParser()
             config.read(args.config)
             self.lookup = config["Discovery"]["Strategy"]
             self.dissemination = config["Dissemination"]["Strategy"]
 
             # Obtain topics to publish
-            self.logger.debug("PublisherAppln::configure - selecting our topic list")
+            self.logger.info("PublisherAppln::configure - selecting our topic list")
             ts = TopicSelector()
             self.topiclist = ts.interest(self.num_topics)
 
             # Initialize the middleware object and pass dissemination info.
-            self.logger.debug("PublisherAppln::configure - initializing the middleware object")
+            self.logger.info("PublisherAppln::configure - initializing the middleware object")
             self.mw_obj = PublisherMW(self.logger)
             self.mw_obj.configure(args, self.dissemination, self.lookup)
             self.logger.info("PublisherAppln::configure - configuration complete")
@@ -76,7 +77,7 @@ class PublisherAppln():
         try:
             self.logger.info("PublisherAppln::driver")
             self.dump()
-            self.logger.debug("PublisherAppln::driver - setting up upcall handle")
+            self.logger.info("PublisherAppln::driver - setting up upcall handle")
             self.mw_obj.set_upcall_handle(self)
             self.state = self.State.REGISTER
             self.mw_obj.event_loop(timeout=0)
@@ -89,26 +90,34 @@ class PublisherAppln():
         try:
             self.logger.info("PublisherAppln::invoke_operation")
             if self.state == self.State.REGISTER:
-                self.logger.debug("PublisherAppln::invoke_operation - registering with Discovery service")
+                self.logger.info("PublisherAppln::invoke_operation - registering with Discovery service")
                 self.mw_obj.register(self.name, self.topiclist)
                 return None
             elif self.state == self.State.ISREADY:
-                self.logger.debug("PublisherAppln::invoke_operation - checking if system is ready")
-                self.mw_obj.is_ready()
-                return None
-            elif self.state == self.State.LOOKUP_BROKER:
-                self.logger.debug("PublisherAppln::invoke_operation - looking up broker")
-                self.mw_obj.lookup_broker()
-                return None
-            elif self.state == self.State.DISSEMINATE:
-                self.logger.debug("PublisherAppln::invoke_operation - starting dissemination")
+                self.logger.info("PublisherAppln::invoke_operation - starting dissemination")
                 ts = TopicSelector()
                 for i in range(self.iters):
                     for topic in self.topiclist:
                         dissemination_data = ts.gen_publication(topic)
                         self.mw_obj.disseminate(self.name, topic, dissemination_data)
                     time.sleep(1/float(self.frequency))
-                self.logger.debug("PublisherAppln::invoke_operation - dissemination completed")
+                self.logger.info("PublisherAppln::invoke_operation - dissemination completed")
+                self.state = self.State.COMPLETED
+                return 0
+                return None
+            elif self.state == self.State.LOOKUP_BROKER:
+                self.logger.info("PublisherAppln::invoke_operation - looking up broker")
+                self.mw_obj.lookup_broker()
+                return None
+            elif self.state == self.State.DISSEMINATE:
+                self.logger.info("PublisherAppln::invoke_operation - starting dissemination")
+                ts = TopicSelector()
+                for i in range(self.iters):
+                    for topic in self.topiclist:
+                        dissemination_data = ts.gen_publication(topic)
+                        self.mw_obj.disseminate(self.name, topic, dissemination_data)
+                    time.sleep(1/float(self.frequency))
+                self.logger.info("PublisherAppln::invoke_operation - dissemination completed")
                 self.state = self.State.COMPLETED
                 return 0
             elif self.state == self.State.COMPLETED:
@@ -119,36 +128,57 @@ class PublisherAppln():
         except Exception as e:
             raise e
 
+    # def register_response(self, reg_resp):
+    #     '''Handle the registration response from Discovery service.'''
+    #     try:
+    #         self.logger.info("PublisherAppln::register_response")
+    #         if reg_resp.status == discovery_pb2.STATUS_SUCCESS:
+    #             self.logger.info("PublisherAppln::register_response - registration successful")
+    #             self.state = self.State.DISSEMINATE
+    #             return 0
+    #         else:
+    #             self.logger.info("PublisherAppln::register_response - registration failure: {}".format(reg_resp.reason))
+    #             raise ValueError("Publisher needs to have a unique ID")
+    #     except Exception as e:
+    #         raise e
+
     def register_response(self, reg_resp):
         '''Handle the registration response from Discovery service.'''
         try:
             self.logger.info("PublisherAppln::register_response")
+            # Print a simple string representation:
+            # self.logger.info("reg_resp: %s", str(reg_resp))
+            
+            # # Alternatively, print a detailed text format:
+            # detailed = text_format.MessageToString(reg_resp)
+            # self.logger.info("Registration response details:\n%s", detailed)
+            
             if reg_resp.status == discovery_pb2.STATUS_SUCCESS:
-                self.logger.debug("PublisherAppln::register_response - registration successful")
-                self.state = self.State.ISREADY
-                return 0
-            else:
-                self.logger.debug("PublisherAppln::register_response - registration failure: {}".format(reg_resp.reason))
-                raise ValueError("Publisher needs to have a unique ID")
-        except Exception as e:
-            raise e
-
-    def isready_response(self, isready_resp):
-        '''Handle the is_ready response from Discovery service.'''
-        try:
-            self.logger.info("PublisherAppln::isready_response")
-            if not isready_resp.status:
-                self.logger.debug("PublisherAppln::isready_response - not ready; retrying")
-                time.sleep(10)
-            else:
-                # If using ViaBroker, move to LOOKUP_BROKER state; otherwise proceed directly to dissemination.
+                self.logger.info("PublisherAppln::register_response - registration successful")
                 if self.dissemination == "ViaBroker":
                     self.state = self.State.LOOKUP_BROKER
                 else:
                     self.state = self.State.DISSEMINATE
-            return 0
+                return 0
         except Exception as e:
-            raise e
+            self.logger.error("Error printing reg_resp: %s", e)
+
+    # def isready_response(self, isready_resp):
+    #     '''Handle the is_ready response from Discovery service.'''
+    #     try:
+    #         self.logger.info("PublisherAppln::isready_response")
+    #         if not isready_resp.status:
+    #             self.logger.info("PublisherAppln::isready_response - not ready; retrying")
+    #             time.sleep(10)
+    #         else:
+    #             # If using ViaBroker, move to LOOKUP_BROKER state; otherwise proceed directly to dissemination.
+    #             if self.dissemination == "ViaBroker":
+    #                 self.state = self.State.LOOKUP_BROKER
+    #             else:
+    #                 self.state = self.State.DISSEMINATE
+    #         return 0
+    #     except Exception as e:
+    #         raise e
 
     def broker_lookup_response(self, broker_info):
         '''Upcall from the middleware after a successful broker lookup.
@@ -196,16 +226,16 @@ def main():
     try:
         logging.info("Main - acquiring logger")
         logger = logging.getLogger("PublisherAppln")
-        logger.debug("Main: parse command line arguments")
+        logger.info("Main: parse command line arguments")
         args = parseCmdLineArgs()
-        logger.debug("Main: resetting log level to {}".format(args.loglevel))
+        logger.info("Main: resetting log level to {}".format(args.loglevel))
         logger.setLevel(args.loglevel)
-        logger.debug("Main: effective log level is {}".format(logger.getEffectiveLevel()))
-        logger.debug("Main: obtaining PublisherAppln object")
+        logger.info("Main: effective log level is {}".format(logger.getEffectiveLevel()))
+        logger.info("Main: obtaining PublisherAppln object")
         pub_app = PublisherAppln(logger)
-        logger.debug("Main: configuring PublisherAppln object")
+        logger.info("Main: configuring PublisherAppln object")
         pub_app.configure(args)
-        logger.debug("Main: invoking PublisherAppln driver")
+        logger.info("Main: invoking PublisherAppln driver")
         pub_app.driver()
     except Exception as e:
         logger.error("Exception caught in main - {}".format(e))
