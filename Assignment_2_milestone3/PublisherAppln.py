@@ -42,6 +42,7 @@ class PublisherAppln():
         self.mw_obj = None                  # middleware object handle
         self.logger = logger                # internal logger
 
+
     def configure(self, args):
         '''Initialize the PublisherAppln object.'''
         try:
@@ -63,10 +64,35 @@ class PublisherAppln():
             self.logger.info("PublisherAppln::configure - selecting our topic list")
             ts = TopicSelector()
             self.topiclist = ts.interest(self.num_topics)
+            discovery_group=""
+            broker_group=""
+
+            og_topiclist = ["weather", "humidity", "airquality", "light", \
+                          "pressure", "temperature", "sound", "altitude", \
+                          "location"]
+            groups = []
+            for topic in self.topiclist:
+                self.logger.info("PublisherAppln::configure - topic: %s", topic)
+                if topic in og_topiclist[:3]:
+                    groups.append(1)
+                elif topic in og_topiclist[3:6]:
+                    groups.append(2)
+                elif topic in og_topiclist[6:]:
+                    groups.append(3)
+
+            if len(groups) == 1:
+                discovery_group = groups[0]
+            else:
+                discovery_group = random.choice(groups)
+            
+            self.logger.info("PublisherAppln::configure - Discovery group: %s", discovery_group)
+                    
+
+
 
             # Initialize the middleware object and pass dissemination info.
             self.logger.info("PublisherAppln::configure - initializing the middleware object")
-            self.mw_obj = PublisherMW(self.logger)
+            self.mw_obj = PublisherMW(self.logger,discovery_group)
             self.mw_obj.set_upcall_handle(self)
             self.mw_obj.configure(args, self.dissemination)
             self.logger.info("PublisherAppln::configure - configuration complete")

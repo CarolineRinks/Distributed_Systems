@@ -14,7 +14,7 @@ class BrokerLeaderElection:
 
     def __init__(self, zk_driver, broker_mw,
                  ip, front_port, back_port,
-                 election_path="/root/broker/replicas",
+                 election_path="/root/broker/replica",
                  primary_path="/root/broker/primary",
                  lease_path="/root/broker/lease",
                  lease_duration=30):
