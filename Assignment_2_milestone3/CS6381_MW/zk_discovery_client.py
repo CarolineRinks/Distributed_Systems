@@ -11,7 +11,7 @@ class SequentialLeaderElection:
     that will not be renewed. When the lease expires, the leader resigns (by deleting
     its primary pointer and its own election node) and re-joins the election as a new candidate.
     """
-    def __init__(self, zk_driver, ip,port, election_path="/root/discovery/replicas",
+    def __init__(self, zk_driver, ip,port, election_path="/root/discovery/replica",
                  primary_path="/root/discovery/primary",
                  lease_path="/root/discovery/lease",
                  lease_duration=10,

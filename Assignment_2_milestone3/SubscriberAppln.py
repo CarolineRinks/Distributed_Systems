@@ -39,7 +39,25 @@ class SubscriberAppln():
             self.dissemination = config["Dissemination"]["Strategy"]
             self.topiclist.append(args.topic)
             self.logger.info("SubscriberAppln::configure - initializing middleware object")
-            self.mw_obj = SubscriberMW(self.logger, self.topiclist, self.dissemination)
+            
+            # Assign the correct Group number to this sub
+            og_topiclist = ["weather", "humidity", "airquality", "light", \
+                          "pressure", "temperature", "sound", "altitude", \
+                          "location"]
+            groups = []
+            for topic in self.topiclist:
+                if topic in og_topiclist[:3]:
+                    groups.append(1)
+                elif topic in og_topiclist[3:6]:
+                    groups.append(2)
+                elif topic in og_topiclist[6:]:
+                    groups.append(3)
+            if len(groups) == 1:
+                self.group = groups[0]
+            else:
+                self.group = random.choice(groups)
+
+            self.mw_obj = SubscriberMW(self.logger, self.topiclist, self.dissemination, self.group)
             self.mw_obj.configure(args, self.dissemination)
             self.logger.info("SubscriberAppln::configure - configuration complete")
         except Exception as e:

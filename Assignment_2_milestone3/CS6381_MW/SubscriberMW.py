@@ -5,7 +5,7 @@ from CS6381_MW import discovery_pb2
 from .zkclient import ZK_Driver
 
 class SubscriberMW():
-    def __init__(self, logger, topiclist, dissemination):
+    def __init__(self, logger, topiclist, dissemination, discovery_group):
         self.logger = logger
         self.req = None                   # REQ socket for Discovery service
         self.sub = None                   # SUB socket for receiving messages
@@ -18,6 +18,7 @@ class SubscriberMW():
         self.handle_events = True         # Event loop control
         self.dissemination = dissemination
         self.lookup_pending = False
+        self.discovery_group = discovery_group
 
         # New attribute: current broker endpoint for dissemination (tcp://IP:port)
         self.current_broker_endpoint = None
@@ -55,7 +56,7 @@ class SubscriberMW():
             
             # Retrieve the primary discovery pointer from ZooKeeper.
             try:
-                primary_data, _ = self.zk_obj.zk.get("/root/discovery/primary")
+                primary_data, _ = self.zk_obj.zk.get(f"/root/discovery/group{self.discovery_group}/primary")
                 primary_str = primary_data.decode('utf-8')
                 new_connect_str = f"tcp://{primary_str}"
                 self.discovery_primary_endpoint = new_connect_str
@@ -65,7 +66,7 @@ class SubscriberMW():
                 self.logger.error("SubscriberMW::configure - error retrieving primary discovery pointer: " + str(e))
 
             # Set a watch on the primary discovery node.
-            @self.zk_obj.zk.DataWatch("/root/discovery/primary")
+            @self.zk_obj.zk.DataWatch(f"/root/discovery/group{self.discovery_group}/primary")
             def watch_primary(data, stat, event):
                 if data:
                     new_primary = data.decode('utf-8')
