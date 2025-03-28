@@ -65,6 +65,11 @@ class SubscriberMW():
             except Exception as e:
                 self.logger.error("SubscriberMW::configure - error retrieving primary discovery pointer: " + str(e))
 
+            # Set subscriptions on the SUB socket.
+            for topic in self.topiclist:
+                self.sub.setsockopt_string(zmq.SUBSCRIBE, topic)
+            self.logger.info("SubscriberMW::configure completed")
+
             # Set a watch on the primary discovery node.
             @self.zk_obj.zk.DataWatch(f"/root/discovery/group{self.discovery_group}/primary")
             def watch_primary(data, stat, event):
@@ -82,7 +87,7 @@ class SubscriberMW():
                         self.discovery_primary_endpoint = new_connect_str
 
             # *** NEW: Watch for Broker Primary Changes ***
-            @self.zk_obj.zk.DataWatch("/root/broker/primary")
+            @self.zk_obj.zk.DataWatch(f"/root/broker/group{str(self.discovery_group)}/primary")
             def watch_broker_primary(data, stat, event):
                 if data:
                     new_broker_str = data.decode('utf-8')
@@ -107,11 +112,6 @@ class SubscriberMW():
                         self.sub.connect(new_broker_endpoint)
                         self.current_broker_endpoint = new_broker_endpoint
 
-            # Set subscriptions on the SUB socket.
-            for topic in self.topiclist:
-                self.sub.setsockopt_string(zmq.SUBSCRIBE, topic)
-            self.logger.info("SubscriberMW::configure completed")
-
             # Register subscriber in ZooKeeper.
             self.logger.info(f"Zookeeper: Creating znode for Subscriber {args.name} with addr {self.addr}, port {self.port}")
             self.zk_obj.create_znode("subscriber", args.name, self.addr, self.port)
@@ -131,6 +131,7 @@ class SubscriberMW():
         try:
             self.logger.info("SubscriberMW::configure_sources")
             for source in sources:
+                self.logger.info(f"SubscriberMW::configure_sources - configuring {source} !!!!!!!!")
                 connect_str = f"tcp://{source.addr}:{source.port}"
                 self.sub.connect(connect_str)
             self.logger.info("SubscriberMW::configure_sources - completed")

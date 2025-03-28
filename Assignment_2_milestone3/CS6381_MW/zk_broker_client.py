@@ -14,10 +14,10 @@ class BrokerLeaderElection:
 
     def __init__(self, zk_driver, broker_mw,
                  ip, front_port, back_port,
-                 election_path="/root/broker/replica",
-                 primary_path="/root/broker/primary",
-                 lease_path="/root/broker/lease",
-                 lease_duration=30):
+                 election_path="",
+                 primary_path="",
+                 lease_path="",
+                 lease_duration=200):
         self.zk = zk_driver.zk
         self.broker_mw = broker_mw  # So we can call back into BrokerMW to register
         self.ip = ip

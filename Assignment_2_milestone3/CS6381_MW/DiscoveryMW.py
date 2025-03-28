@@ -23,7 +23,7 @@ class DiscoveryMW:
         self.publishers = {}
         self.subscribers = {}
         self.broker = None
-        self.group=args.group
+        self.group = args.group
         # Track whether we have a quorum (>=3 replicas).
         self.quorum_active = True
 
@@ -33,7 +33,7 @@ class DiscoveryMW:
         self.zkclient_obj.start_session()
 
         # State node path (persistent)
-        self.state_path = "/root/discovery/state"
+        self.state_path = f"/root/discovery/group{str(self.group)}/state"
 
         # Load existing state from ZooKeeper (if any)
         self.load_state()
@@ -43,10 +43,10 @@ class DiscoveryMW:
             self.zkclient_obj,
             self.discovery_ip,
             self.discovery_port,
-            election_path=f"/root/discovery/group{self.group}/replicas",
+            election_path=f"/root/discovery/group{self.group}/replica",
             primary_path=f"/root/discovery/group{self.group}/primary",
             lease_path=f"/root/discovery/group{self.group}/lease",
-            lease_duration=30,  # seconds
+            lease_duration=180,  # seconds
             state_callback=self.load_state
         )
         self.zk_election.start()
@@ -65,7 +65,7 @@ class DiscoveryMW:
 
         # *** Quorum Watch ***  
         # Watch the ephemeral-sequential election path to see how many replicas are alive.
-        @self.zkclient_obj.zk.ChildrenWatch(f"/root/discovery/group{self.group}/replicas")
+        @self.zkclient_obj.zk.ChildrenWatch(f"/root/discovery/group{self.group}/replica")
         def watch_replicas(children):
             count = len(children)
             if count < 3:

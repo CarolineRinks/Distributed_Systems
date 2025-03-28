@@ -58,6 +58,7 @@ def main():
     parser.add_argument("-n", "--name", default="broke", help="Unique name for the broker")
     parser.add_argument("-sp", "--sub_port", type=int, default = 6000, required=True, help="port that subscriber will connect to")
     parser.add_argument("-pp", "--pub_port", type=int, default = 6001, required=True, help="port that publisher will connect to")
+    parser.add_argument("-g", "--group", type=int, required=True, help="Group Number for the Discovery Service")
     args = parser.parse_args()
 
     app = BrokerAppln(logger,args)
