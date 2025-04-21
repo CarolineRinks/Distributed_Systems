@@ -14,7 +14,7 @@ class SequentialLeaderElection:
     def __init__(self, zk_driver, ip,port, election_path="/root/discovery/replica",
                  primary_path="/root/discovery/primary",
                  lease_path="/root/discovery/lease",
-                 lease_duration=10,
+                 lease_duration=180,
                  state_callback=None):
         self.zk = zk_driver.zk  # Use the existing kazoo client from ZK_Driver
         self.ip = ip

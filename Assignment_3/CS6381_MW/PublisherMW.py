@@ -5,7 +5,7 @@ from CS6381_MW import discovery_pb2
 from CS6381_MW.zkclient import ZK_Driver
 
 class PublisherMW():
-    def __init__(self, logger, discovery_group):
+    def __init__(self, logger, group):
         self.logger = logger                # Logger instance
         self.req = None                     # REQ socket for Discovery service
         self.pub = None                     # PUB socket for dissemination
@@ -15,7 +15,7 @@ class PublisherMW():
         self.upcall_obj = None              # Pointer to the application-level object
         self.handle_events = True           # Controls the event loop
         self.dissemination = None           # Dissemination strategy ("Direct" or "ViaBroker")
-        self.discovery_group = discovery_group
+        self.group = group
         
         # Attribute to hold current discovery primary endpoint (tcp://IP:port)
         self.discovery_primary_endpoint = None
@@ -48,7 +48,7 @@ class PublisherMW():
 
             # Retrieve the primary discovery pointer from ZooKeeper.
             try:
-                primary_data, _ = self.zk_obj.zk.get(f"/root/discovery/group{self.discovery_group}/primary")
+                primary_data, _ = self.zk_obj.zk.get(f"/root/discovery/group{self.group}/primary")
                 primary_str = primary_data.decode('utf-8')
                 new_connect_str = f"tcp://{primary_str}"
                 self.discovery_primary_endpoint = new_connect_str
@@ -58,7 +58,7 @@ class PublisherMW():
                 self.logger.error("PublisherMW::configure - error retrieving primary discovery pointer: " + str(e))
 
             # Set a watch on the primary discovery pointer so that if it changes, we reconnect.
-            @self.zk_obj.zk.DataWatch(f"/root/discovery/group{self.discovery_group}/primary")
+            @self.zk_obj.zk.DataWatch(f"/root/discovery/group{self.group}/primary")
             def watch_primary(data, stat, event):
                 if data:
                     new_primary = data.decode('utf-8')
@@ -74,12 +74,9 @@ class PublisherMW():
                         self.discovery_primary_endpoint = new_connect_str
 
             # Set a watch on the broker primary so that when the broker leader changes, we update our connection.
-            
-
-            # In Direct mode, bind the PUB socket so that subscribers can connect.
             if self.dissemination == "ViaBroker":
                 self.logger.info("PublisherMW::configure - ViaBroker mode: publisher will connect to broker for dissemination.")
-                @self.zk_obj.zk.DataWatch("/root/broker/primary")
+                @self.zk_obj.zk.DataWatch(f"/root/broker/group{str(self.group)}/primary")
                 def watch_broker_primary(data, stat, event):
                     if data:
                         new_broker = data.decode('utf-8')

@@ -13,6 +13,7 @@ class BrokerMW:
         self.logger = logger
         self.context = zmq.Context()
         self.poller = zmq.Poller()
+        self.group = args.group
 
         self.discovery_req = None
         self.discovery_primary_endpoint = None
@@ -22,7 +23,6 @@ class BrokerMW:
         self.frontend_port = args.pub_port
         self.backend_port = args.sub_port
 
-        
         self.zk_obj = ZK_Driver()
         self.zk_obj.init_driver() 
         self.zk_obj.start_session()
@@ -36,15 +36,15 @@ class BrokerMW:
             ip=self.broker_ip,
             front_port=self.frontend_port,
             back_port=self.backend_port,
-            election_path="/root/broker/replicas",
-            primary_path="/root/broker/primary",
-            lease_path="/root/broker/lease",
-            lease_duration=30
+            election_path=f"/root/broker/group{str(self.group)}/replica",
+            primary_path=f"/root/broker/group{str(self.group)}/primary",
+            lease_path=f"/root/broker/group{str(self.group)}/lease",
+            lease_duration=200
         )
         self.broker_election.start()
 
         # Watch ephemeral-sequential broker replicas to maintain quorum
-        @self.zk_obj.zk.ChildrenWatch("/root/broker/replicas")
+        @self.zk_obj.zk.ChildrenWatch(f"/root/broker/group{str(self.group)}/replica")
         def watch_broker_replicas(children):
             count = len(children)
             if count < 3:
@@ -62,7 +62,7 @@ class BrokerMW:
         self.discovery_req = self.context.socket(zmq.REQ)
         try:
             # Retrieve the primary discovery pointer from ZooKeeper
-            primary_data, _ = self.zk_obj.zk.get("/root/discovery/primary")
+            primary_data, _ = self.zk_obj.zk.get(f"/root/discovery/group{str(self.group)}/primary")
             primary_str = primary_data.decode('utf-8')
             new_connect_str = f"tcp://{primary_str}"
             self.discovery_primary_endpoint = new_connect_str
@@ -72,7 +72,7 @@ class BrokerMW:
             self.logger.error("BrokerMW::configure - error retrieving primary discovery pointer: " + str(e))
 
         # Watch for changes to the Discovery primary
-        @self.zk_obj.zk.DataWatch("/root/discovery/primary")
+        @self.zk_obj.zk.DataWatch(f"/root/discovery/group{str(self.group)}/primary")
         def watch_primary(data, stat, event):
             if data:
                 new_primary = data.decode('utf-8')
