@@ -250,6 +250,7 @@ class PublisherMW():
 
     def register(self, name, topiclist):
         try:
+            self.name = name
             self.logger.info("PublisherMW::register")
             reg_info = discovery_pb2.RegistrantInfo()
             reg_info.id = name
@@ -291,17 +292,20 @@ class PublisherMW():
         try:
             timestamp = time.time()
             #self.logger.info("PublisherMW::disseminate")
-
-            send_str = f"{topic}:{timestamp}:{data}"
-            # Store publication in publisher's history
-            if self.history == {}:
-                self.history[topic] = []
-                self.history[topic].append(send_str)
-            elif len(self.history[topic]) < (self.history_size[topic]):
-                self.history[topic].append(send_str)
+            send_str = ""
+            if self.dissemination == "ViaBroker":
+                send_str = f"{topic}:{timestamp}:{data}:{self.name}"
             else:
-                self.history[topic].pop(0)             # remove earliest publication to maintain history size
-                self.history[topic].append(send_str)
+                send_str = f"{topic}:{timestamp}:{data}"
+                # Store publication in publisher's history
+                if self.history == {}:
+                    self.history[topic] = []
+                    self.history[topic].append(send_str)
+                elif len(self.history[topic]) < (self.history_size[topic]):
+                    self.history[topic].append(send_str)
+                else:
+                    self.history[topic].pop(0)             # remove earliest publication to maintain history size
+                    self.history[topic].append(send_str)
             # Send publication to subs
             self.logger.info("PublisherMW::disseminate - sending: {}".format(send_str))
             self.pub.send(bytes(send_str, "utf-8"))
