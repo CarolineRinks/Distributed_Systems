@@ -69,11 +69,11 @@ class DiscoveryMW:
         def watch_replicas(children):
             count = len(children)
             if count < 3:
-                self.logger.warning(f"Quorum lost: only {count} replica(s). Blocking new registrations.")
+                self.logger.warning(f"Quorum for discovery lost: only {count} replica(s). Blocking new registrations.")
                 self.quorum_active = False
                 # Optionally spawn or request a new replica to start here.
             else:
-                self.logger.info(f"Quorum restored with {count} replicas. Accepting registrations.")
+                self.logger.info(f"Quorum for discovery restored with {count} replicas. Accepting registrations.")
                 self.quorum_active = True
 
     def configure(self, args):
@@ -260,7 +260,7 @@ class DiscoveryMW:
         matched.sort(key=lambda triple: triple[0])
 
         if matched == []:
-            self.logger.info("*********************DiscoveryMW::process_lookup_request - matched is empty :(((((((")
+            self.logger.info("ERROR::DiscoveryMW::process_lookup_request - no publishers found")
 
         # Add publishers to response in order of ownership strength
         for ownership, pub_id, pub_data in matched:

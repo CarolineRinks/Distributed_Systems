@@ -66,7 +66,10 @@ class PublisherAppln():
             # Obtain topics to publish
             self.logger.info("PublisherAppln::configure - selecting our topic list")
             ts = TopicSelector()
-            self.topiclist = ts.interest(self.num_topics)
+            if args.topics:
+                self.topiclist = args.topics
+            else:
+                self.topiclist = ts.interest(self.num_topics)
 
             # Configure dictionary of history sizes
             self.history_sizes = {}
@@ -226,6 +229,7 @@ def parseCmdLineArgs():
     parser.add_argument("-l", "--loglevel", type=int, default=logging.INFO,
                         choices=[logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL],
                         help="Logging level")
+    parser.add_argument("-t", "--topics", type=str, nargs="+", default=None, help="Explicit topic(s) to publish")
     return parser.parse_args()
 
 def main():

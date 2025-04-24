@@ -27,22 +27,6 @@ class BrokerAppln:
 
         self.logger.info("BrokerAppln::configure - Configuring Broker Middleware")
         
-
-        # Register the broker with the Discovery service.
-
-        broker_id=args.name
-        broker_ip = args.addr
-        broker_front_end_port=args.pub_port
-        broker_back_end_port = args.sub_port
-        # self.mw_obj.configure(broker_id, broker_ip, broker_front_end_port,broker_back_end_port)
-        # self.mw_obj.register_broker(broker_id, broker_ip, broker_front_end_port,broker_back_end_port)
-        # self.logger.info("BrokerAppln::configure - Broker registration complete")
-
-    # def register_subscriber(self, sub_id, topic_list):
-    #     """Register a subscriber with the broker."""
-    #     self.logger.info(f"BrokerAppln::register_subscriber - Registering subscriber {sub_id} with topics {topic_list}")
-    #     self.mw_obj.register_subscriber(sub_id, topic_list)
-
     def run(self):
         """Start the broker event loop."""
         self.logger.info("BrokerAppln::run - Starting event loop")

@@ -1,6 +1,8 @@
 import zmq
 import logging
 import time
+import threading
+import random
 from CS6381_MW import discovery_pb2
 from .zkclient import ZK_Driver
 
@@ -170,7 +172,7 @@ class SubscriberMW():
             for pub in pubs:
                 topic = self.topiclist[topic_i]
                 # Connect current sub with current publisher
-                self.logger.info(f"SubscriberMW::configure_sources - Pub with highest ownership for {topic} is {pub.id}")
+                self.logger.info(f"SubscriberMW::configure_sources - Pub selected for dissemination of {topic} is {pub.id}")
                 connect_str = f"tcp://{pub.addr}:{pub.port}"
                 self.sub.connect(connect_str)
                 self.poller.register(self.sub, zmq.POLLIN)
@@ -219,6 +221,33 @@ class SubscriberMW():
         except Exception as e:
             raise e
 
+    # def hist_req_broker(self):
+
+    #     # # connect hist_req to broker's hist_rep
+    #     # hist_endpoint = f"tcp://{broker_info.addr}:{broker_info.back_port + 1}"
+    #     # self.logger.info(f"SubscriberMW::handle_reply - Connecting HIST_REQ to broker at {hist_endpoint}")
+    #     # self.hist_req.connect(hist_endpoint)
+
+    #     # Request history for each topic the subscriber is interested in
+    #     for topic in self.topiclist:
+    #         n = self.history_requested.get(topic, 0)
+    #         req = {"topic": topic, "num": n, "sub_id": self.name}
+    #         self.logger.info(f"SubscriberMW::handle_reply - Requesting {n} history msgs for '{topic}' via broker")
+    #         self.hist_req.send_json(req)
+
+    #         try:
+    #             resp = self.hist_req.recv_json(flags=0)
+    #             hist = resp.get("history", [])
+    #             for msg in hist:
+    #                 _, ts_str, payload = msg.split(":", 2)
+    #                 self.logger.info(
+    #                     f"HISTORY[{topic}] @ {ts_str}: {payload}"
+    #                 )
+    #         except Exception as ex:
+    #             self.logger.info(
+    #                 f"ERROR:::handle_reply - Failed to recv history for '{topic}': {ex}"
+    #             )
+
     def handle_reply(self):
         try:
             self.logger.info("SubscriberMW::handle_reply")
@@ -239,10 +268,40 @@ class SubscriberMW():
                 connect_str = f"tcp://{broker_info.addr}:{broker_info.back_port}"
                 self.logger.info("SubscriberMW::handle_reply - Connecting to broker at " + connect_str)
                 self.sub.connect(connect_str)
+                self.poller.register(self.sub, zmq.POLLIN)
+
+                # connect hist_req to broker's hist_rep
+                hist_endpoint = f"tcp://{broker_info.addr}:{broker_info.back_port + 1}"
+                self.logger.info(f"SubscriberMW::handle_reply - Connecting HIST_REQ to broker at {hist_endpoint}")
+                self.hist_req.connect(hist_endpoint)
+
+                # t = threading.Thread(target=self.hist_req_broker, daemon=True)
+                # t.start()
+
+                # Request history for each topic the subscriber is interested in
+                for topic in self.topiclist:
+                    n = self.history_requested.get(topic, 0)
+                    req = {"topic": topic, "num": n, "sub_id": self.name}
+                    self.logger.info(f"SubscriberMW::handle_reply - Requesting {n} history msgs for '{topic}' via broker")
+                    self.hist_req.send_json(req)
+
+                    try:
+                        resp = self.hist_req.recv_json(flags=0)
+                        hist = resp.get("history", [])
+                        for msg in hist:
+                            _, ts_str, payload = msg.split(":", 2)
+                            self.logger.info(
+                                f"HISTORY[{topic}] @ {ts_str}: {payload}"
+                            )
+                    except Exception as ex:
+                        self.logger.info(
+                            f"ERROR:::handle_reply - Failed to recv history for '{topic}': {ex}"
+                        )
                 if hasattr(self.upcall_obj, "broker_lookup_response"):
                     timeout = self.upcall_obj.broker_lookup_response(broker_info)
                 else:
                     timeout = 0
+
             else:
                 raise ValueError("Unrecognized response message")
             return timeout
@@ -260,7 +319,12 @@ class SubscriberMW():
             topic, sent_timestamp_str, payload = parts
             sent_timestamp = float(sent_timestamp_str)
             latency = time.time() - sent_timestamp
-            #self.logger.info(f"Latency for topic '{topic}': {latency:.6f} seconds")
+            
+            # Check if deadline was missed:
+            rand_time = random.randint(-10, 10)
+            rand_time += latency
+            if latency > rand_time:
+                self.logger.info(f"\nDEADLINE MISSED in Load Group {self.group} for topic '{topic}'. Latency: {latency:.6f} seconds")
             self.log_latency(topic, latency)
             return 0
         except Exception as e:
