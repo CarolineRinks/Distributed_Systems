@@ -1,0 +1,132 @@
+syntax = "proto3";
+
+// ----------------------------------------------------------------------
+// Enumerations
+// ----------------------------------------------------------------------
+
+// Role enumeration: identifies whether an entity is a publisher, subscriber, or broker.
+enum Role {
+    ROLE_UNKNOWN = 0;
+    ROLE_PUBLISHER = 1;
+    ROLE_SUBSCRIBER = 2;
+    ROLE_BOTH = 3;  // Used for the broker.
+}
+
+// Status enumeration: indicates the outcome of a request.
+enum Status {
+    STATUS_UNKNOWN = 0;
+    STATUS_SUCCESS = 1;
+    STATUS_FAILURE = 2;
+    STATUS_CHECK_AGAIN = 3;   // When the server is not ready to provide info yet.
+}
+
+// Message Types: lists all the kinds of messages the Discovery service supports.
+enum MsgTypes {
+    TYPE_UNKNOWN = 0;
+    TYPE_REGISTER = 1;  
+    TYPE_ISREADY = 2;    
+    TYPE_LOOKUP_PUB_BY_TOPIC = 3;
+    TYPE_LOOKUP_ALL_PUBS = 4;      // Optional: can be removed if not used.
+    TYPE_LOOKUP_BROKER = 5;        // For broker lookup.
+    TYPE_REGISTER_BROKER = 6;      // For broker registration.
+}
+
+// ----------------------------------------------------------------------
+// Registration and Lookup Messages
+// ----------------------------------------------------------------------
+
+// RegistrantInfo: carries basic identity and connection info.
+message RegistrantInfo {
+    string id = 1;                                  // Unique name of the entity.
+    optional string addr = 2;                       // IP address (for publishers).
+    optional uint32 port = 3;                       // Port number (for publishers).
+    repeated uint32 history_size = 4;               // Size of History for each topic (for publishers)
+    optional uint32 ownership = 5;                  // Ownership strength (for publishers)
+}
+
+// RegisterReq: sent by publishers or subscribers to register with the Discovery service.
+message RegisterReq {
+    Role role = 1;                          // Role of the entity.
+    RegistrantInfo info = 2;                // Registration info.
+    repeated string topiclist = 3;          // List of topics published or subscribed to.
+}
+
+// RegisterResp: sent as a response to a registration request.
+message RegisterResp {
+    Status status = 1;                     // Success or failure.
+    optional string reason = 2;             // Reason for failure (if any).
+}
+
+// IsReadyReq: request to check if the system is ready.
+message IsReadyReq {
+    // No fields needed.
+}
+
+// IsReadyResp: response indicating whether the system is ready.
+message IsReadyResp {
+    bool status = 1;                       // True if ready, false otherwise.
+}
+
+// BrokerInfo: carries the broker’s identity and connection information.
+message BrokerInfo {
+    string id = 1;
+    string addr = 2;
+    uint32 front_port = 3;
+    uint32 back_port = 4;
+}
+
+// RegisterBrokerReq: request used by the broker to register itself.
+message RegisterBrokerReq {
+    BrokerInfo broker = 1;
+}
+
+// LookupBrokerResp: response to a broker lookup request.
+message LookupBrokerResp {
+    BrokerInfo broker = 1;
+}
+
+// LookupPubByTopicReq: request to obtain a list of publishers for specified topics.
+message LookupPubByTopicReq {
+    repeated string topiclist = 1;
+}
+
+// LookupPubByTopicResp: response to a publisher lookup request.
+message LookupPubByTopicResp {
+    bool status = 1;
+    // Nested message carrying publisher details.
+    message PublisherInfo {
+        string id = 2;
+        string addr = 3;
+        uint32 port = 4;
+        repeated uint32 history_size = 5;
+        uint32 ownership = 6;
+        repeated string topics = 7;
+    }
+    repeated PublisherInfo publishers = 8;
+}
+
+// ----------------------------------------------------------------------
+// Discovery Request and Response Union Messages
+// ----------------------------------------------------------------------
+
+// DiscoveryReq: the union request message for Discovery service operations.
+message DiscoveryReq {
+    MsgTypes msg_type = 1;
+    oneof Content {
+        RegisterReq register_req = 2;
+        IsReadyReq isready_req = 3;
+        LookupPubByTopicReq lookup_req = 4;
+        RegisterBrokerReq register_broker_req = 5;  // For broker registration.
+    }
+}
+
+// DiscoveryResp: the union response message for Discovery service operations.
+message DiscoveryResp {
+    MsgTypes msg_type = 1;
+    oneof Content {
+        RegisterResp register_resp = 2;
+        IsReadyResp isready_resp = 3;
+        LookupPubByTopicResp lookup_resp = 4;
+        LookupBrokerResp lookup_resp_broker = 5;  // For broker lookup.
+    }
+}
